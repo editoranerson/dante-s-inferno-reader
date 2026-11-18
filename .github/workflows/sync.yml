@@ -8,6 +8,12 @@ on:
 jobs:
   sync:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        repository:
+          - editoranerson/dante-s-inferno-reader
+          - editoranerson/universo-dante
     steps:
       - name: Checkout do codigo
         uses: actions/checkout@v4
@@ -18,6 +24,7 @@ jobs:
       - name: Espelhar para o repositorio secundario
         env:
           DEST_TOKEN: ${{ secrets.SYNC_TOKEN }}
+          DEST_REPOSITORY: ${{ matrix.repository }}
         run: |
-          git remote add destino https://editoranerson:${DEST_TOKEN}@github.com/editoranerson/dante-s-inferno-reader.git
+          git remote add destino "https://editoranerson:${DEST_TOKEN}@github.com/${DEST_REPOSITORY}.git"
           git push --force --prune destino +refs/remotes/origin/*:refs/heads/* +refs/tags/*:refs/tags/*

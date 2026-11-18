@@ -30,3 +30,4 @@ use the editor.
 <!-- LOVABLE:END -->
 
 - Regression tests for the imported Dante Edge handler execute its transpiled source with mocked external services; this catches syntax and post-save failures without spending real user credits.
+- Repository mirrors use independent GitHub Actions matrix jobs with the shared SYNC_TOKEN secret, so a failed destination does not cancel the other mirror.
