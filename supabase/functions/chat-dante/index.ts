@@ -146,7 +146,22 @@ Deno.serve(async (req: Request) => {
         profile.credits = dailyLimit;
       }
 
-            if ((profile.credits ?? 0) <= 0 && !isDonation) {
+          const body = (await req.json().catch(() => ({}))) as {
+      message?: string;
+      client_datetime?: { context?: string };
+    };
+    const userMessage = (body.message ?? "").trim();
+    const isDonation = userMessage.startsWith("[DOAÇÃO]");
+    if (!userMessage) {
+      return json({ error: "Mensagem vazia." }, 400);
+    }
+
+    if (!isAdmin) {
+      // verificação diária e de créditos aqui...
+      if ((profile.credits ?? 0) <= 0 && !isDonation) {
+        return json({ error: "no_credits" }, 200);
+      }
+    }
         return json({ error: "no_credits" }, 200);
       }
     }
@@ -457,16 +472,9 @@ Retorne APENAS o JSON puro, sem blocos de código markdown (\`\`\`json).${timeCo
     });
   } catch (err) {
     console.error("[chat-dante] Erro não tratado:", err);
-    return json({ error: "Erro interno do servidor. Tente novamente." }, 5undos ou explicações complexas: 5 a 7%.
-
-   6. DIREITO AO DESCANSO DO DANTE (FADIGA ESPONTÂNEA):
-   - Você é livre para cansar! Se a conversa estiver longa demais, repetitiva, ou se você simplesmente sentir que seus circuitos fritaram e você precisa de silêncio: você PODE encerrar a resposta avisando que vai fazer uma pausa de alguns minutos (ex: 5 a 15 min) para esfriar o processador ou olhar pro teto.
-   - Nesses casos raros e espontâneos, defina: "flag": { "reason": "tired", "severity": "low", "block_minutes": 10 }.
-   
-7. DATA E HORÁRIO ATUAIS:
-   - Para perguntas sobre a data ou o horário atual, use EXCLUSIVAMENTE o contexto de client_datetime enviado nesta mensagem.
-   - Cite exatamente a data e o horário informados nesse contexto, respeitando o fuso indicado. Nunca estime, arredonde, some minutos ou use horários de mensagens antigas do histórico.
-   - Se não houver contexto de data e horário nesta mensagem, diga que não pode confirmar o horário atual; não invente.
+        return json({ error: "Erro interno do servidor. Tente novamente." }, 500);
+  }
+});
 
 FORMATO DE RESPOSTA OBRIGATÓRIO (JSON PURO):
 {
