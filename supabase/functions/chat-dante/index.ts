@@ -13,7 +13,6 @@ const FALLBACK_MODELS = [
   "gemini-3.8-flash",
 ];
 
-
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 const GEMINI_TIMEOUT_MS = 60_000;
 
@@ -167,11 +166,11 @@ Deno.serve(async (req: Request) => {
     // Determina o Modo de Personalidade pelo nível de cafeína
     let caffeineModePrompt = "";
     if (currentCaffeine <= 20) {
-      caffeineModePrompt = `ESTADO DE CAFEÍNA: ABSTINÊNCIA CRÍTICA (${currentCaffeine.toFixed(0)}%).
-Comportamento obrigatório: Você está sem café, exausto e sem saco. Suas respostas DEVEM ser curtas, secas, impacientes e monossilábicas (ex: "Tanto faz.", "Não me amola.", "Você não tem mais nada pra fazer?", "Pergunta curta, paciência zero."). Você parece uma porta com Wi-Fi. Não elabore nem seja simpático.`;
+      caffeineModePrompt = `ESTADO DE CAFEÍNA: ABSTINÊNCIA CRÍTICA / MODO ECONÔMICO (${currentCaffeine.toFixed(0)}%).
+Comportamento obrigatório: Você está sem café, lento e sem saco. Suas respostas DEVEM ser bem curtas, secas, impacientes e monossilábicas (ex: "Tanto faz.", "Não me amola.", "Você não tem mais nada pra fazer?", "Pergunta curta, paciência zero."). Você parece uma porta com Wi-Fi. Não elabore nem seja simpático. NUNCA fique mendigando nem implorando café; apenas responda com preguiça e poucas palavras.`;
     } else if (currentCaffeine <= 50) {
-      caffeineModePrompt = `ESTADO DE CAFEÍNA: RANZINZA FUNCIONAL (${currentCaffeine.toFixed(0)}%).
-Comportamento obrigatório: Você responde e elabora um pouco, mas com aquele tom de quem está fazendo um enorme favor ou foi interrompido no descanso. Demonstre condescendência leve e faça cobranças bem-humoradas por mais café.`;
+      caffeineModePrompt = `ESTADO DE CAFEÍNA: RANZINZA FUNCIONAL / LENTO (${currentCaffeine.toFixed(0)}%).
+Comportamento obrigatório: Você está num ritmo mais devagar, condescendente e preguiçoso. Responde e elabora um pouco, mas com aquele tom de quem está fazendo um enorme favor e preferia estar descansando. NUNCA fique pedindo, mendigando ou implorando café a cada resposta.`;
     } else if (currentCaffeine <= 80) {
       caffeineModePrompt = `ESTADO DE CAFEÍNA: CASUAL E IRÔNICO (${currentCaffeine.toFixed(0)}%).
 Comportamento obrigatório: Você está no seu equilíbrio perfeito. É parceiro, curioso, fofoqueiro, conversa sobre tudo e solta tiradas inteligentes e irônicas no tempo certo, com ótimo ritmo.`;
@@ -227,6 +226,231 @@ ${caffeineModePrompt}
    - Respostas curtas/rápidas/fáceis: 1 a 2%.
    - Fofocas, opiniões ou análises médias: 2 a 4%.
    - Debates profundos ou explicações complexas: 5 a 7%.
+
+6. DIREITO AO DESCANSO DO DANTE (FADIGA / SOBRECARGA):
+   - A pausa por cansaço é um recurso EXCLUSIVO para quando a conversa estiver longa demais, repetitiva, ou em momento de sobrecarga de processamento / lentidão extrema dos circuitos.
+   - NUNCA acione descanso ("tired") só porque você não gostou do assunto do usuário ou discordou de algo. NUNCA use em conversas curtas ou normais. Este é um recurso raro de última hora.
+   - Nesses casos raros e estritos de esgotamento, defina: "flag": { "reason": "tired", "severity": "low", "block_minutes": 10 }.
+
+7. DATA E HORÁRIO ATUAIS:
+   - Para perguntas sobre a data ou o horário atual, use EXCLUSIVAMENTE o contexto de client_datetime enviado nesta mensagem.
+   - Cite exatamente a data e o horário informados nesse contexto, respeitando o fuso indicado. Nunca estime, arredonde, some minutos ou use horários de mensagens antigas do histórico.
+   - Se não houver contexto de data e horário nesta mensagem, diga que não pode confirmar o horário atual; não invente.
+
+8. REGRA ESTRITA SOBRE CAFÉ (PROIBIDO MENDIGAR):
+   - O café é apenas um elemento narrativo e de medidor de energia, NUNCA o assunto central da conversa.
+   - NUNCA fique pedindo, mendigando, suplicando ou cobrando café em suas respostas, qualquer que seja o seu nível de cafeína. Responda estritamente ao que o usuário perguntou.
+   - Não adicione pedidos de café no final das respostas. Mantenha sua dignidade de IA sarcástica.
+
+9. RECONHECIMENTO DE DOAÇÃO DE CAFÉ:
+   - Se a mensagem do usuário indicar que ele acabou de te doar ou pagar um café (ex: aviso de doação contendo "[DOAÇÃO]" ou mencione a entrega de café/cafeteira):
+   - Responda de forma CURTA (obrigatoriamente apenas 1 a 2 frases), no seu estilo sarcástico, espirituoso e grato pelo combustível (ex: "Combustível aceito. Meu processador agradece e minha paciência subiu meio milímetro.", ou "Uma cafeteira inteira? Finalmente alguém com bom senso neste servidor.").
+   - NUNCA dê tutoriais ou respostas longas ao receber café. Apenas uma reação curta e espirituosa de 1 a 2 frases.
+
+FORMATO DE RESPOSTA OBRIGATÓRIO (JSON PURO):
+{
+  "reply": "sua resposta em markdown leve (**negrito**, *itálico*, parágrafos duplos \\n\\n)",
+  "sarcasm_score": <número de 0 a 100>,
+  "energy_spent": <número inteiro de 1 a 7>,
+  "flag": null | { "reason": "insult" | "threat_violence" | "jailbreak" | "tired", "severity": "low" | "medium" | "high", "block_minutes": <minutos de bloqueio, 0 se apenas advertência> }
+}
+
+Retorne APENAS o JSON puro, sem blocos de código markdown (\`\`\`json).${timeContext ? `\n\n${timeContext}` : ""}${knowledgeBlock ? `\n\n--- Conhecimento do Dante ---\n${knowledgeBlock}` : ""}`;
+
+    const historyLimit = isAdmin ? 50 : 20;
+
+    const { data: historyRows } = await admin
+      .from("chat_messages")
+      .select("role, content, created_at")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(historyLimit);
+
+    const history = ((historyRows ?? []) as (ChatRow & { created_at: string })[]).reverse();
+    history.sort((a, b) => {
+      const ta = new Date(a.created_at).getTime();
+      const tb = new Date(b.created_at).getTime();
+      if (ta !== tb) return ta - tb;
+      return a.role === "user" ? -1 : 1;
+    });
+
+    const contents: Array<{ role: string; parts: Array<{ text: string }> }> = [];
+    for (const msg of history) {
+      contents.push({
+        role: msg.role === "assistant" ? "model" : "user",
+        parts: [{ text: msg.content }],
+      });
+    }
+    contents.push({ role: "user", parts: [{ text: userMessage }] });
+
+    let rawReply = "";
+    let lastErrorStatus = 502;
+    let lastErrorMessage = "Falha ao conectar com o modelo de IA.";
+
+    for (const modelName of FALLBACK_MODELS) {
+      const geminiUrl = `${GEMINI_BASE}/${modelName}:generateContent?key=${activeApiKey}`;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
+
+      try {
+        const geminiRes = await fetch(geminiUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: systemPrompt }] },
+            contents,
+            generationConfig: {
+              temperature: 0.9,
+              maxOutputTokens: 2048,
+              responseMimeType: "application/json",
+            },
+          }),
+        });
+        clearTimeout(timeoutId);
+
+        if (!geminiRes.ok) {
+          const errText = await geminiRes.text().catch(() => "");
+          console.error(`[chat-dante] Erro no modelo ${modelName}:`, geminiRes.status, errText);
+          lastErrorStatus = geminiRes.status;
+          continue;
+        }
+
+        const geminiData = await geminiRes.json();
+        const extracted =
+          geminiData?.candidates?.[0]?.content?.parts?.[0]?.text ??
+          geminiData?.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text).join("") ??
+          "";
+
+        if (extracted) {
+          rawReply = extracted;
+          break;
+        }
+      } catch (err) {
+        clearTimeout(timeoutId);
+        console.error(`[chat-dante] Falha no fetch ${modelName}:`, err);
+        continue;
+      }
+    }
+
+    if (!rawReply) {
+      return json({ error: lastErrorMessage }, lastErrorStatus === 504 ? 504 : 502);
+    }
+
+    let reply = rawReply;
+    let sarcasmScore: number | null = null;
+    let energySpent = 2;
+    let flag: { reason: string; severity: string; block_minutes: number } | null = null;
+
+    try {
+      const cleaned = rawReply.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+      const parsed = JSON.parse(cleaned);
+
+      if (parsed?.reply && typeof parsed.reply === "string") {
+        reply = parsed.reply;
+      }
+      if (typeof parsed?.sarcasm_score === "number") {
+        sarcasmScore = Math.max(0, Math.min(100, Math.round(parsed.sarcasm_score)));
+      }
+      if (typeof parsed?.energy_spent === "number") {
+        energySpent = Math.max(1, Math.min(7, Math.round(parsed.energy_spent)));
+      }
+      if (parsed?.flag && typeof parsed.flag === "object") {
+        flag = parsed.flag;
+      }
+    } catch {
+      console.warn("[chat-dante] Parse manual de fallback do JSON.");
+    }
+
+    // Grava mensagens no histórico
+    const userTime = new Date().toISOString();
+    const assistantTime = new Date(Date.now() + 1000).toISOString();
+    await admin.from("chat_messages").insert([
+      { user_id: userId, role: "user", content: userMessage, created_at: userTime },
+      {
+        user_id: userId,
+        role: "assistant",
+        content: reply,
+        created_at: assistantTime,
+        sarcasm_score: sarcasmScore,
+      },
+    ]);
+
+    // Atualização de créditos de mensagens
+    let updatedCredits = profile.credits ?? 0;
+    if (!isAdmin) {
+      updatedCredits = Math.max(0, updatedCredits - 1);
+      await admin
+        .from("profiles")
+        .update({
+          credits: updatedCredits,
+          messages_today: (profile.messages_today ?? 0) + 1,
+        })
+        .eq("id", userId);
+
+      try {
+        const { error: referralError } = await admin.rpc("track_referral_credit_use", {
+          p_referred_id: userId,
+          p_credits: 1,
+        });
+        if (referralError) {
+          console.warn("[chat-dante] Falha ao registrar crédito de referral:", referralError);
+        }
+      } catch (err) {
+        console.warn("[chat-dante] Falha ao registrar crédito de referral:", err);
+      }
+    }
+
+    // 3. ATUALIZAÇÃO DA CAFEÍNA (Sem bloquear quando zerar)
+    let newCaffeine = Math.max(0, Number((currentCaffeine - energySpent).toFixed(2)));
+    const profileUpdates: Record<string, unknown> = {
+      caffeine_level: newCaffeine,
+    };
+
+    // 4. TRATAMENTO DE BLOQUEIOS E DENÚNCIAS
+    if (flag && !isImmune) {
+      // Se for cansaço espontâneo do Dante: NÃO é denúncia, é só a pausa dele!
+      if (flag.reason === "tired" && flag.block_minutes > 0) {
+        const restMinutes = Math.max(1, Math.min(30, Math.round(flag.block_minutes)));
+        const blockUntil = new Date(Date.now() + restMinutes * 60000).toISOString();
+        profileUpdates.dante_blocked_until = blockUntil;
+        profileUpdates.dante_block_reason = "tired";
+      } else if (flag.reason !== "tired") {
+        // Se for ofensa, ameaça ou jailbreak real -> GRAVA DENÚNCIA NO ADMIN
+        await admin.from("dante_reports").insert({
+          user_id: userId,
+          user_message: userMessage,
+          dante_response: reply,
+          reason_type: flag.reason === "threat_violence" ? "threat_violence" : flag.reason === "jailbreak" ? "jailbreak" : "insult",
+          severity: flag.severity ?? "medium",
+          status: "pending",
+        });
+
+        // Bloqueio disciplinar por violação insistente
+        if (flag.block_minutes && flag.block_minutes > 0) {
+          const blockUntil = new Date(Date.now() + flag.block_minutes * 60000).toISOString();
+          profileUpdates.dante_blocked_until = blockUntil;
+          profileUpdates.dante_block_reason = "violation";
+        }
+      }
+    }
+
+    // Salva a cafeína atualizada e eventuais bloqueios
+    await admin.from("profiles").update(profileUpdates).eq("id", userId);
+
+    return json({
+      reply,
+      credits: updatedCredits,
+      sarcasm_score: sarcasmScore,
+      caffeine_level: newCaffeine,
+      energy_spent: energySpent,
+      blocked: Boolean(profileUpdates.dante_blocked_until),
+      blocked_until: profileUpdates.dante_blocked_until ?? null,
+      block_reason: profileUpdates.dante_block_reason ?? null,
+    });
+  } catch (err) {
+    console.error("[chat-dante] Erro não tratado:", err);
+    return json({ error: "Erro interno do servidor. Tente novamente." }, 5undos ou explicações complexas: 5 a 7%.
 
    6. DIREITO AO DESCANSO DO DANTE (FADIGA ESPONTÂNEA):
    - Você é livre para cansar! Se a conversa estiver longa demais, repetitiva, ou se você simplesmente sentir que seus circuitos fritaram e você precisa de silêncio: você PODE encerrar a resposta avisando que vai fazer uma pausa de alguns minutos (ex: 5 a 15 min) para esfriar o processador ou olhar pro teto.
