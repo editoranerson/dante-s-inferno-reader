@@ -1,0 +1,1 @@
+ALTER TABLE public.archived_chapters ADD COLUMN IF NOT EXISTS cover_image_url text;

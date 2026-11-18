@@ -10,33 +10,102 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as SplatRouteImport } from './routes/$'
+import { Route as ApiPublicEleicaoRouteImport } from './routes/api/public/eleicao'
+import { Route as ApiPublicStripeCheckoutRouteImport } from './routes/api/public/stripe-checkout'
+import { Route as ApiPublicStripeWebhookRouteImport } from './routes/api/public/stripe-webhook'
+import { Route as ApiPublicVisualRouteImport } from './routes/api/public/visual'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SplatRoute = SplatRouteImport.update({
+  id: '/$',
+  path: '/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicEleicaoRoute = ApiPublicEleicaoRouteImport.update({
+  id: '/api/public/eleicao',
+  path: '/api/public/eleicao',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicStripeCheckoutRoute = ApiPublicStripeCheckoutRouteImport.update({
+  id: '/api/public/stripe-checkout',
+  path: '/api/public/stripe-checkout',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicStripeWebhookRoute = ApiPublicStripeWebhookRouteImport.update({
+  id: '/api/public/stripe-webhook',
+  path: '/api/public/stripe-webhook',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicVisualRoute = ApiPublicVisualRouteImport.update({
+  id: '/api/public/visual',
+  path: '/api/public/visual',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/$': typeof SplatRoute
+  '/api/public/eleicao': typeof ApiPublicEleicaoRoute
+  '/api/public/stripe-checkout': typeof ApiPublicStripeCheckoutRoute
+  '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
+  '/api/public/visual': typeof ApiPublicVisualRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/$': typeof SplatRoute
+  '/api/public/eleicao': typeof ApiPublicEleicaoRoute
+  '/api/public/stripe-checkout': typeof ApiPublicStripeCheckoutRoute
+  '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
+  '/api/public/visual': typeof ApiPublicVisualRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/$': typeof SplatRoute
+  '/api/public/eleicao': typeof ApiPublicEleicaoRoute
+  '/api/public/stripe-checkout': typeof ApiPublicStripeCheckoutRoute
+  '/api/public/stripe-webhook': typeof ApiPublicStripeWebhookRoute
+  '/api/public/visual': typeof ApiPublicVisualRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/$'
+    | '/api/public/eleicao'
+    | '/api/public/stripe-checkout'
+    | '/api/public/stripe-webhook'
+    | '/api/public/visual'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/$'
+    | '/api/public/eleicao'
+    | '/api/public/stripe-checkout'
+    | '/api/public/stripe-webhook'
+    | '/api/public/visual'
+  id:
+    | '__root__'
+    | '/'
+    | '/$'
+    | '/api/public/eleicao'
+    | '/api/public/stripe-checkout'
+    | '/api/public/stripe-webhook'
+    | '/api/public/visual'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  SplatRoute: typeof SplatRoute
+  ApiPublicEleicaoRoute: typeof ApiPublicEleicaoRoute
+  ApiPublicStripeCheckoutRoute: typeof ApiPublicStripeCheckoutRoute
+  ApiPublicStripeWebhookRoute: typeof ApiPublicStripeWebhookRoute
+  ApiPublicVisualRoute: typeof ApiPublicVisualRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +117,51 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/$': {
+      id: '/$'
+      path: '/$'
+      fullPath: '/$'
+      preLoaderRoute: typeof SplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/eleicao': {
+      id: '/api/public/eleicao'
+      path: '/api/public/eleicao'
+      fullPath: '/api/public/eleicao'
+      preLoaderRoute: typeof ApiPublicEleicaoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/stripe-checkout': {
+      id: '/api/public/stripe-checkout'
+      path: '/api/public/stripe-checkout'
+      fullPath: '/api/public/stripe-checkout'
+      preLoaderRoute: typeof ApiPublicStripeCheckoutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/stripe-webhook': {
+      id: '/api/public/stripe-webhook'
+      path: '/api/public/stripe-webhook'
+      fullPath: '/api/public/stripe-webhook'
+      preLoaderRoute: typeof ApiPublicStripeWebhookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/visual': {
+      id: '/api/public/visual'
+      path: '/api/public/visual'
+      fullPath: '/api/public/visual'
+      preLoaderRoute: typeof ApiPublicVisualRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  SplatRoute: SplatRoute,
+  ApiPublicEleicaoRoute: ApiPublicEleicaoRoute,
+  ApiPublicStripeCheckoutRoute: ApiPublicStripeCheckoutRoute,
+  ApiPublicStripeWebhookRoute: ApiPublicStripeWebhookRoute,
+  ApiPublicVisualRoute: ApiPublicVisualRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.buy_wallpaper(uuid) FROM PUBLIC, anon;

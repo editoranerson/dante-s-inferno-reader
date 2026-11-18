@@ -1,0 +1,41 @@
+/* Hide category tab scrollbars while preserving native touch scrolling. */
+.biblioteca-categories-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.biblioteca-categories-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+@media (max-width: 639px) {
+  /* ChaptersAdmin: stack the heading and add button, and keep row content compact. */
+  .max-w-7xl > div:nth-child(3) > div:nth-child(2) > div:nth-child(2) > div:first-child {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0.75rem !important;
+  }
+
+  .max-w-7xl > div:nth-child(3) > div:nth-child(2) > div:nth-child(2) > div:first-child > button {
+    width: 100%;
+  }
+
+  .max-w-7xl > div:nth-child(3) > div:nth-child(2) > div:nth-child(2) > div:nth-child(2) > div.card:has(button[aria-label="Editar"]):has(button[aria-label="Excluir"]) {
+    gap: 0.75rem !important;
+    padding: 0.75rem !important;
+  }
+
+  .max-w-7xl > div:nth-child(3) > div:nth-child(2) > div:nth-child(2) > div:nth-child(2) > div.card:has(button[aria-label="Editar"]):has(button[aria-label="Excluir"]) > div:last-child,
+  .max-w-7xl > div:nth-child(3) > div:nth-child(2) > div:nth-child(2) > div:nth-child(2) > div.card:has(button[aria-label="Editar"]):has(button[aria-label="Excluir"]) > div:last-child > button {
+    flex-shrink: 0;
+  }
+}
+
+@media (min-width: 640px) {
+  .max-w-7xl > div:nth-child(3) > div:nth-child(2) > div:nth-child(2) > div:first-child {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+  }
+}

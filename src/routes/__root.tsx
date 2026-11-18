@@ -75,29 +75,67 @@ function ErrorComponent({ error, reset }: ErrorComponentProps) {
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   head: () => ({
-    // Replace these placeholders with the app's name and description when first building the app.
-    // Each content route, / included, must still set its own head(). Never add og:image or
-    // twitter:image here: every page without its own would inherit the root's preview image.
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
-      { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { name: "google", content: "notranslate" },
+      { httpEquiv: "content-language", content: "pt-BR" },
+      { property: "og:locale", content: "pt_BR" },
+      { property: "og:site_name", content: "Querido Dante" },
+      { title: "Querido Dante" },
+      { name: "description", content: "O universo interativo de Querido Dante." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:site", content: "@Lovable" },
+      { name: "mitgo-verification", content: "e96be845-3b97-4c0a-8c64-7d5a34799b04" },
     ],
     links: [
+      { rel: "preconnect", href: "https://fonts.googleapis.com" },
+      { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
+      {
+        rel: "stylesheet",
+        href: "https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Fredoka:wght@500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap",
+      },
       {
         rel: "stylesheet",
         href: appCss,
       },
-      { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+      { rel: "icon", href: "/favicon.png", type: "image/png" },
+      { rel: "apple-touch-icon", href: "/favicon.png" },
     ],
+    scripts: [
+      {
+        children: `window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+var __c = null;
+try { __c = localStorage.getItem('uqd_cookie_consent'); } catch (e) {}
+var __g = __c === 'accepted' ? 'granted' : 'denied';
+gtag('consent', 'default', {
+  ad_storage: __g,
+  ad_user_data: __g,
+  ad_personalization: __g,
+  analytics_storage: __g,
+  wait_for_update: 500
+});
+if (__g === 'denied') { window.adsbygoogle = window.adsbygoogle || []; window.adsbygoogle.requestNonPersonalizedAds = 1; }`,
+      },
+      {
+        src: "https://www.googletagmanager.com/gtag/js?id=G-MBQYQH3791",
+        async: true,
+      },
+      {
+        children: `gtag('js', new Date());
+gtag('config', 'G-MBQYQH3791');`,
+      },
+
+      {
+        src: "https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8156784789940885",
+        async: true,
+        crossOrigin: "anonymous",
+      },
+    ],
+
   }),
+
   shellComponent: RootShell,
   component: RootComponent,
   notFoundComponent: NotFoundComponent,
@@ -106,7 +144,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="pt-BR" translate="no" className="notranslate">
       <head>
         <HeadContent />
       </head>

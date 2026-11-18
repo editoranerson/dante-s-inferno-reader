@@ -1,0 +1,277 @@
+import { useEffect, useState } from 'react';
+import { X, ShieldCheck, Lock, Check, Coins, Image as ImageIcon, Droplet, Coffee, Thermometer, CupSoda } from 'lucide-react';
+import { waterFor, formatMl, ML_PER_MESSAGE } from '@/lib/water';
+import danteAvatar from '@/assets/dante-avatar.webp';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/lib/auth';
+import { useToast } from '@/components/Toast';
+import { fetchWallpapers, fetchOwnedWallpapers, getSelectedWallpaper, setSelectedWallpaper, type ChatWallpaper } from '@/lib/wallpapers';
+import {
+  formatCaffeine,
+  getCaffeineMode,
+  type CoffeeDonationEvent,
+  type CoffeeDonationResult,
+  type BottleRefillResult,
+  type DanteCoffeeItem,
+} from '@/lib/danteCoffee';
+import { DanteCoffeeIcon } from '@/components/DanteCoffeeIcon';
+
+interface DanteProfileModalProps {
+  onClose: () => void;
+  onCoffeeDonated?: (event: CoffeeDonationEvent) => void;
+}
+
+export function DanteProfileModal({ onClose, onCoffeeDonated }: DanteProfileModalProps) {
+  const { user, profile, isAdmin, refreshProfile } = useAuth();
+  const { toast } = useToast();
+  const [items, setItems] = useState<ChatWallpaper[]>([]);
+  const [owned, setOwned] = useState<Set<string>>(new Set());
+  const [selected, setSelected] = useState('');
+  const [busy, setBusy] = useState('');
+  const [tab, setTab] = useState<'wallpaper' | 'water' | 'coffee'>('wallpaper');
+  const [msgCount, setMsgCount] = useState<number | null>(null);
+  const [coffeeItems, setCoffeeItems] = useState<DanteCoffeeItem[]>([]);
+  const [coffeeLoading, setCoffeeLoading] = useState(true);
+
+  useEffect(() => {
+    setSelected(getSelectedWallpaper());
+    void fetchWallpapers().then(setItems);
+    void supabase
+      .from('dante_coffee_items')
+      .select('*')
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true })
+      .then(({ data, error }) => {
+        if (error) toast('Não foi possível carregar o cardápio do Dante.', 'error');
+        setCoffeeItems((data as DanteCoffeeItem[]) ?? []);
+        setCoffeeLoading(false);
+      });
+    if (user) {
+      void fetchOwnedWallpapers().then(setOwned);
+      void supabase.from('chat_messages').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('role', 'user')
+        .then(({ count }) => setMsgCount(count ?? 0));
+    }
+  }, [user, toast]);
+
+  const unlocked = (w: ChatWallpaper) => w.access !== 'paid' || isAdmin || owned.has(w.id);
+  const choose = (url: string) => { setSelectedWallpaper(url); setSelected(url); };
+
+  const buy = async (w: ChatWallpaper) => {
+    if (!user) return toast('Entre na sua conta para comprar.', 'error');
+    if (!confirm(`Comprar "${w.name || 'papel de parede'}" por ${w.price_dantes} Dantes?`)) return;
+    setBusy(w.id);
+    const { data, error } = await supabase.rpc('buy_wallpaper', { p_id: w.id });
+    setBusy('');
+    const res = data as { ok: boolean; error?: string } | null;
+    if (error || !res?.ok) return toast(res?.error || 'Não foi possível comprar.', 'error');
+    setOwned(new Set([...owned, w.id]));
+    await refreshProfile();
+    choose(w.image_url);
+    toast('Comprado e aplicado!', 'success');
+  };
+
+  const donate = async (item: DanteCoffeeItem) => {
+    if (!user) return toast('Entre na sua conta para doar um café.', 'error');
+    if ((profile?.points ?? 0) < item.price_dantes) return toast('Dantes insuficientes para esse café.', 'error');
+    setBusy(item.id);
+    const { data, error } = await supabase.rpc('donate_dante_coffee', { p_item_id: item.id });
+    if (error || !(data as CoffeeDonationResult | null)?.success) {
+      setBusy('');
+      const result = data as CoffeeDonationResult | null;
+      return toast(result?.error || error?.message || 'A cafeteira recusou o pedido. Tente novamente.', 'error');
+    }
+    const result = data as CoffeeDonationResult;
+    const previousCaffeine = Number(profile?.caffeine_level ?? 50);
+    const caffeineAdded = Math.max(0, Number(result.caffeine_level ?? previousCaffeine) - previousCaffeine);
+    const bottleAdded = Number(result.bottle_added ?? 0);
+    await refreshProfile();
+    setBusy('');
+    onCoffeeDonated?.({ item, caffeineAdded, bottleAdded });
+    toast(
+      bottleAdded > 0
+        ? `Café entregue! ${formatCaffeine(bottleAdded)} do excedente foi para a Garrafa Térmica.`
+        : `${item.name} entregue ao Dante!`,
+      'success',
+    );
+  };
+
+  const refill = async () => {
+    if (!user) return;
+    setBusy('bottle');
+    const { data, error } = await supabase.rpc('refill_dante_from_bottle', { p_amount: null });
+    setBusy('');
+    const result = data as BottleRefillResult | null;
+    if (error || !result?.success) return toast(result?.error || error?.message || 'Não foi possível servir da garrafa.', 'error');
+    await refreshProfile();
+    toast(`${formatCaffeine(result.transferred)} servidos sem gastar nenhum Dante!`, 'success');
+  };
+
+  const caffeine = Number(profile?.caffeine_level ?? 50);
+  const bottle = Number(profile?.caffeine_bottle ?? 0);
+  const mode = getCaffeineMode(caffeine);
+
+  return (
+    <div className="absolute inset-0 z-20 flex flex-col bg-ink-900/98 animate-fade-in">
+      <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+        <span className="font-display text-sm font-semibold text-grape-50">Perfil do Dante</span>
+        <button onClick={onClose} className="rounded-full p-2 text-grape-200/70 hover:bg-white/10" aria-label="Fechar perfil"><X size={18} /></button>
+      </div>
+      <div className="flex-1 overflow-y-auto px-4 py-5">
+        <div className="flex flex-col items-center text-center">
+          <div className="relative h-24 w-24 rounded-full p-[3px]">
+            <span className="dante-avatar-ring absolute inset-0 rounded-full" aria-hidden="true" />
+            <img src={danteAvatar} alt="Dante" className="relative h-full w-full rounded-full object-cover" />
+          </div>
+          <h2 className="mt-3 font-dante text-3xl font-semibold text-grape-50">Dante</h2>
+          <div className="mt-2 inline-flex items-center gap-2 rounded-xl border border-fuchsia-400/30 bg-gradient-to-r from-fuchsia-500/15 to-grape-500/15 px-3 py-1.5 text-xs font-semibold text-fuchsia-100">
+            <span className="flex h-5 w-5 items-center justify-center rounded-md bg-gradient-to-br from-fuchsia-500 to-grape-500"><ShieldCheck size={12} /></span>
+            Verificação extremamente duvidosa
+          </div>
+        </div>
+
+        <div className="mt-6 grid grid-cols-3 gap-2">
+          {([
+            ['wallpaper', ImageIcon, 'Papel de parede'],
+            ['water', Droplet, 'Gasto de água'],
+            ['coffee', Coffee, 'Café & Energia'],
+          ] as const).map(([id, Icon, label]) => (
+            <button key={id} onClick={() => setTab(id)}
+              className={`flex flex-col items-center gap-1 rounded-xl border px-2 py-2.5 text-[11px] font-semibold transition ${tab === id ? 'border-fuchsia-400/60 bg-fuchsia-500/15 text-fuchsia-100' : 'border-white/10 bg-white/5 text-grape-200/70 hover:bg-white/10'}`}>
+              <Icon size={18} />{label}
+            </button>
+          ))}
+        </div>
+
+        {tab === 'water' && <WaterPanel loggedIn={!!user} count={msgCount} />}
+
+        {tab === 'coffee' && (
+          <div className="mt-5 space-y-4">
+            <section className="rounded-2xl border border-gold-400/20 bg-gold-400/5 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 text-sm font-semibold text-grape-50"><Thermometer size={17} className="text-gold-400" /> Termômetro de cafeína</div>
+                <span className="font-dante text-2xl font-semibold text-gold-400">{formatCaffeine(caffeine)}</span>
+              </div>
+              <div className="mt-3 h-3 overflow-hidden rounded-full bg-white/10" role="progressbar" aria-label="Nível de cafeína" aria-valuemin={0} aria-valuemax={100} aria-valuenow={caffeine}>
+                <div className="h-full rounded-full bg-gradient-to-r from-grape-500 via-rose-500 to-gold-400 transition-all duration-500" style={{ width: `${Math.max(0, Math.min(100, caffeine))}%` }} />
+              </div>
+              <div className="mt-3 flex items-start gap-3">
+                <span className="text-3xl" aria-hidden="true">{mode.emoji}</span>
+                <div>
+                  <p className="text-sm font-semibold text-grape-50">{mode.label}</p>
+                  <p className="mt-0.5 text-xs leading-relaxed text-grape-200/60">{mode.description}</p>
+                </div>
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-sky2-400/20 bg-sky2-400/5 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <CupSoda size={19} className="text-sky2-300" />
+                  <div>
+                    <h3 className="text-sm font-semibold text-grape-50">Sua Garrafa Térmica</h3>
+                    <p className="text-[11px] text-grape-200/50">50% do excedente de cada café fica guardado aqui.</p>
+                  </div>
+                </div>
+                <span className="font-dante text-xl font-semibold text-sky2-300">{formatCaffeine(bottle)}</span>
+              </div>
+              <button
+                onClick={refill}
+                disabled={busy === 'bottle' || bottle <= 0 || caffeine >= 100}
+                className="btn-ghost mt-3 w-full py-2 text-xs disabled:opacity-40"
+              >
+                <Coffee size={15} />
+                {busy === 'bottle' ? 'Servindo...' : caffeine >= 100 ? 'Dante já está a 100%' : bottle <= 0 ? 'Garrafa vazia' : 'Servir da Garrafa (grátis)'}
+              </button>
+            </section>
+
+            <section>
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-sm font-semibold text-grape-50">Cardápio do Dante</h3>
+                  <p className="text-[11px] text-grape-200/50">Doações funcionam mesmo durante uma pausa do chat.</p>
+                </div>
+                <span className="flex items-center gap-1 whitespace-nowrap text-xs text-gold-400"><Coins size={12} /> {profile?.points ?? 0}</span>
+              </div>
+              {coffeeLoading ? (
+                <p className="py-5 text-center text-xs text-grape-200/50">Esquentando a água...</p>
+              ) : coffeeItems.length === 0 ? (
+                <p className="rounded-xl border border-white/10 bg-white/5 p-4 text-center text-xs text-grape-200/60">A cafeteira está vazia. O admin ainda não cadastrou cafés.</p>
+              ) : (
+                <div className="space-y-2">
+                  {coffeeItems.map((item) => (
+                    <article key={item.id} className="rounded-xl border border-white/10 bg-white/5 p-3">
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-gold-400/10 text-gold-400"><DanteCoffeeIcon icon={item.icon} /></div>
+                        <div className="min-w-0 flex-1">
+                          <h4 className="text-sm font-semibold text-grape-50">{item.name}</h4>
+                          <p className="mt-0.5 text-[11px] leading-relaxed text-grape-200/50">{item.description}</p>
+                          <p className="mt-1 text-xs font-medium text-gold-400">+{formatCaffeine(item.caffeine_pct)} cafeína · {item.price_dantes} Dantes</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => donate(item)}
+                        disabled={busy === item.id || (profile?.points ?? 0) < item.price_dantes}
+                        className="btn-primary mt-3 w-full py-2 text-xs"
+                      >
+                        <Coffee size={14} /> {busy === item.id ? 'Preparando...' : `Doar por ${item.price_dantes} Dantes`}
+                      </button>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </section>
+          </div>
+        )}
+
+        {tab === 'wallpaper' && <>
+        <div className="mt-5 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-grape-50">Papel de parede do chat</h3>
+          {profile && <span className="flex items-center gap-1 text-xs text-grape-200/70"><Coins size={12} className="text-gold-400" />{profile.points} Dantes</span>}
+        </div>
+        <div className="mt-3 grid grid-cols-3 gap-2">
+          <button onClick={() => choose('')} className={`relative aspect-[9/16] rounded-xl border bg-ink-800 text-[11px] text-grape-200/70 ${!selected ? 'border-fuchsia-400' : 'border-white/10'}`}>
+            Padrão {!selected && <Check size={14} className="absolute right-1 top-1 text-fuchsia-300" />}
+          </button>
+          {items.map((w) => {
+            const ok = unlocked(w);
+            const active = selected === w.image_url;
+            return (
+              <button key={w.id} disabled={busy === w.id} onClick={() => (ok ? choose(w.image_url) : buy(w))}
+                className={`relative aspect-[9/16] overflow-hidden rounded-xl border ${active ? 'border-fuchsia-400' : 'border-white/10'}`} title={w.name}>
+                <img src={w.image_url} alt={w.name} className={`h-full w-full object-cover ${ok ? '' : 'blur-[2px] brightness-50'}`} loading="lazy" />
+                {active && <Check size={14} className="absolute right-1 top-1 rounded-full bg-ink-950/70 text-fuchsia-300" />}
+                {w.access === 'admin' && <span className="absolute left-1 top-1 rounded bg-ink-950/70 px-1 text-[9px] text-gold-300">ADMIN</span>}
+                {!ok && (
+                  <span className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-[11px] font-semibold text-grape-50">
+                    <Lock size={16} />{w.price_dantes} Dantes
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+        {items.length === 0 && <p className="mt-3 text-xs text-grape-200/50">Nenhum papel de parede disponível ainda.</p>}
+        </>}
+      </div>
+    </div>
+  );
+}
+
+function WaterPanel({ loggedIn, count }: { loggedIn: boolean; count: number | null }) {
+  if (!loggedIn) return <p className="mt-5 rounded-xl border border-white/10 bg-white/5 p-4 text-center text-sm text-grape-200/70">Entre na sua conta para ver quanta água suas perguntas já evaporaram. Anônimo, suas gotas somem na nuvem.</p>;
+  if (count === null) return <p className="mt-5 text-center text-xs text-grape-200/50">Medindo o hidrômetro...</p>;
+  const w = waterFor(count);
+  return (
+    <div className="mt-5 rounded-2xl border border-sky-400/20 bg-sky-500/5 p-5 text-center">
+      <div className="text-6xl transition-transform" style={{ transform: `scale(${0.85 + w.progress * 0.3})` }}>{w.level.emoji}</div>
+      <p className="mt-2 font-display text-3xl font-semibold text-grape-50">{formatMl(w.ml)}</p>
+      <p className="text-xs text-grape-200/70">{w.level.label} · {count} {count === 1 ? 'mensagem' : 'mensagens'}</p>
+      <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10">
+        <div className="h-full rounded-full bg-gradient-to-r from-sky-400 to-cyan-300" style={{ width: `${Math.round(w.progress * 100)}%` }} />
+      </div>
+      {w.next && <p className="mt-2 text-[11px] text-grape-200/60">Faltam {w.toNext} mensagens para {w.next.label.toLowerCase()} {w.next.emoji}</p>}
+      <p className="mt-4 text-sm italic text-fuchsia-100">“{w.level.quip}”</p>
+      <p className="mt-4 text-[10px] leading-snug text-grape-200/40">Estimativa média de ~{ML_PER_MESSAGE} ml de água por mensagem, usada no resfriamento de data centers (baseada em estudos públicos sobre IA).</p>
+    </div>
+  );
+}

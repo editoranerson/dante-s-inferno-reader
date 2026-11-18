@@ -1,0 +1,23 @@
+name: Sincronizar Repositorio
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do codigo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Espelhar para o repositorio secundario
+        env:
+          DEST_TOKEN: ${{ secrets.SYNC_TOKEN }}
+        run: |
+          git remote add destino https://editoranerson:${DEST_TOKEN}@github.com/editoranerson/dante-s-inferno-reader.git
+          git push --force --prune destino +refs/remotes/origin/*:refs/heads/* +refs/tags/*:refs/tags/*
