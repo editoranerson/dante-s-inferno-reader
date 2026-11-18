@@ -1,5 +1,10 @@
 # Roadmap
 
+## Correção e publicação solicitadas agora
+- [ ] Remover duplicações e corrigir o Chat Dante, mantendo descanso original e agradecimento direto sem consumo.
+- [ ] Executar testes sem créditos reais e publicar a função no Supabase.
+- [ ] Confirmar conversa real após publicação: depende de sessão no Supabase externo; não disponível aqui.
+
 ## Correção solicitada do chat
 - [x] Corrigir fechamento do código, proteger o registro de indicação contra D-500 e exigir o horário enviado na mensagem.
 - [x] Validar as correções com quatro testes e publicar chat-dante no Supabase (publicação confirmada pela ferramenta).

@@ -116,8 +116,18 @@ Deno.serve(async (req: Request) => {
     // Admin usa chave dedicada quando disponível
     const activeApiKey = isAdmin && adminApiKey ? adminApiKey : apiKey;
 
-    // 2. CONTROLE DIÁRIO DE CRÉDITOS
-    if (!isAdmin) {
+    const body = (await req.json().catch(() => ({}))) as {
+      message?: string;
+      client_datetime?: { context?: string };
+    };
+    const userMessage = (body.message ?? "").trim();
+    const isDonation = userMessage.startsWith("[DOAÇÃO]");
+    if (!userMessage) {
+      return json({ error: "Mensagem vazia." }, 400);
+    }
+
+    // 2. CONTROLE DIÁRIO DE CRÉDITOS (doação não usa créditos)
+    if (!isAdmin && !isDonation) {
       const todayStr = new Date(Date.now() - 3 * 60 * 60 * 1000)
         .toISOString()
         .slice(0, 10);
@@ -146,34 +156,9 @@ Deno.serve(async (req: Request) => {
         profile.credits = dailyLimit;
       }
 
-          const body = (await req.json().catch(() => ({}))) as {
-      message?: string;
-      client_datetime?: { context?: string };
-    };
-    const userMessage = (body.message ?? "").trim();
-    const isDonation = userMessage.startsWith("[DOAÇÃO]");
-    if (!userMessage) {
-      return json({ error: "Mensagem vazia." }, 400);
-    }
-
-    if (!isAdmin) {
-      // verificação diária e de créditos aqui...
-      if ((profile.credits ?? 0) <= 0 && !isDonation) {
+      if ((profile.credits ?? 0) <= 0) {
         return json({ error: "no_credits" }, 200);
       }
-    }
-        return json({ error: "no_credits" }, 200);
-      }
-    }
-
-    const body = (await req.json().catch(() => ({}))) as {
-      message?: string;
-      client_datetime?: { context?: string };
-    };
-    const userMessage = (body.message ?? "").trim();
-        const isDonation = userMessage.startsWith("[DOAÇÃO]");
-    if (!userMessage) {
-      return json({ error: "Mensagem vazia." }, 400);
     }
 
     // Nível atual de cafeína (padrão 50%)
@@ -260,221 +245,9 @@ ${caffeineModePrompt}
 
 9. RECONHECIMENTO EXCLUSIVO DE DOAÇÃO DIRETA ([DOAÇÃO]):
    - Se a mensagem do usuário começar com "[DOAÇÃO]", trata-se de um evento de doação de café direta.
-   - Responda OBRIGATORIAMENTE em apenas 1 a 2 frases curtas agradecendo o combustível no seu estilo Dante.
+   - RESPONDA EXCLUSIVAMENTE agradecendo o gesto em 1 a 2 frases curtas.
+   - Se o usuário apenas comentar que doou em uma mensagem comum sem a tag inicial, responda normalmente à mensagem.
    - NUNCA dê tutoriais nem respostas longas. Apenas um agradecimento curto de 1 a 2 frases.
-
-FORMATO DE RESPOSTA OBRIGATÓRIO (JSON PURO):
-{
-  "reply": "sua resposta em markdown leve (**negrito**, *itálico*, parágrafos duplos \\n\\n)",
-  "sarcasm_score": <número de 0 a 100>,
-  "energy_spent": <número inteiro de 1 a 7>,
-  "flag": null | { "reason": "insult" | "threat_violence" | "jailbreak" | "tired", "severity": "low" | "medium" | "high", "block_minutes": <minutos de bloqueio, 0 se apenas advertência> }
-}
-
-Retorne APENAS o JSON puro, sem blocos de código markdown (\`\`\`json).${timeContext ? `\n\n${timeContext}` : ""}${knowledgeBlock ? `\n\n--- Conhecimento do Dante ---\n${knowledgeBlock}` : ""}`;
-
-    const historyLimit = isAdmin ? 50 : 20;
-
-    const { data: historyRows } = await admin
-      .from("chat_messages")
-      .select("role, content, created_at")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(historyLimit);
-
-    const history = ((historyRows ?? []) as (ChatRow & { created_at: string })[]).reverse();
-    history.sort((a, b) => {
-      const ta = new Date(a.created_at).getTime();
-      const tb = new Date(b.created_at).getTime();
-      if (ta !== tb) return ta - tb;
-      return a.role === "user" ? -1 : 1;
-    });
-
-    const contents: Array<{ role: string; parts: Array<{ text: string }> }> = [];
-    for (const msg of history) {
-      contents.push({
-        role: msg.role === "assistant" ? "model" : "user",
-        parts: [{ text: msg.content }],
-      });
-    }
-    contents.push({ role: "user", parts: [{ text: userMessage }] });
-
-    let rawReply = "";
-    let lastErrorStatus = 502;
-    let lastErrorMessage = "Falha ao conectar com o modelo de IA.";
-
-    for (const modelName of FALLBACK_MODELS) {
-      const geminiUrl = `${GEMINI_BASE}/${modelName}:generateContent?key=${activeApiKey}`;
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
-
-      try {
-        const geminiRes = await fetch(geminiUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          signal: controller.signal,
-          body: JSON.stringify({
-            systemInstruction: { parts: [{ text: systemPrompt }] },
-            contents,
-            generationConfig: {
-              temperature: 0.9,
-              maxOutputTokens: 2048,
-              responseMimeType: "application/json",
-            },
-          }),
-        });
-        clearTimeout(timeoutId);
-
-        if (!geminiRes.ok) {
-          const errText = await geminiRes.text().catch(() => "");
-          console.error(`[chat-dante] Erro no modelo ${modelName}:`, geminiRes.status, errText);
-          lastErrorStatus = geminiRes.status;
-          continue;
-        }
-
-        const geminiData = await geminiRes.json();
-        const extracted =
-          geminiData?.candidates?.[0]?.content?.parts?.[0]?.text ??
-          geminiData?.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text).join("") ??
-          "";
-
-        if (extracted) {
-          rawReply = extracted;
-          break;
-        }
-      } catch (err) {
-        clearTimeout(timeoutId);
-        console.error(`[chat-dante] Falha no fetch ${modelName}:`, err);
-        continue;
-      }
-    }
-
-    if (!rawReply) {
-      return json({ error: lastErrorMessage }, lastErrorStatus === 504 ? 504 : 502);
-    }
-
-    let reply = rawReply;
-    let sarcasmScore: number | null = null;
-    let energySpent = 2;
-    let flag: { reason: string; severity: string; block_minutes: number } | null = null;
-
-    try {
-      const cleaned = rawReply.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
-      const parsed = JSON.parse(cleaned);
-
-      if (parsed?.reply && typeof parsed.reply === "string") {
-        reply = parsed.reply;
-      }
-      if (typeof parsed?.sarcasm_score === "number") {
-        sarcasmScore = Math.max(0, Math.min(100, Math.round(parsed.sarcasm_score)));
-      }
-      if (typeof parsed?.energy_spent === "number") {
-        energySpent = Math.max(1, Math.min(7, Math.round(parsed.energy_spent)));
-      }
-      if (parsed?.flag && typeof parsed.flag === "object") {
-        flag = parsed.flag;
-      }
-        } catch {
-      console.warn("[chat-dante] Parse manual de fallback do JSON.");
-    }
-
-    // Se for doação, zera sarcasmômetro e energia gasta
-    if (isDonation) {
-      sarcasmScore = null;
-      energySpent = 0;
-    }
-
-    // Grava mensagens no histórico
-    const userTime = new Date().toISOString();
-    const assistantTime = new Date(Date.now() + 1000).toISOString();
-    await admin.from("chat_messages").insert([
-      { user_id: userId, role: "user", content: userMessage, created_at: userTime },
-      {
-        user_id: userId,
-        role: "assistant",
-        content: reply,
-        created_at: assistantTime,
-        sarcasm_score: sarcasmScore,
-      },
-    ]);
-
-    // Atualização de créditos de mensagens
-    let updatedCredits = profile.credits ?? 0;
-    if (!isAdmin && !isDonation) {
-      updatedCredits = Math.max(0, updatedCredits - 1);
-      await admin
-        .from("profiles")
-        .update({
-          credits: updatedCredits,
-          messages_today: (profile.messages_today ?? 0) + 1,
-        })
-        .eq("id", userId);
-
-      try {
-        const { error: referralError } = await admin.rpc("track_referral_credit_use", {
-          p_referred_id: userId,
-          p_credits: 1,
-        });
-        if (referralError) {
-          console.warn("[chat-dante] Falha ao registrar crédito de referral:", referralError);
-        }
-      } catch (err) {
-        console.warn("[chat-dante] Falha ao registrar crédito de referral:", err);
-      }
-    }
-
-    // 3. ATUALIZAÇÃO DA CAFEÍNA (Sem bloquear quando zerar)
-    let newCaffeine = isDonation ? currentCaffeine : Math.max(0, Number((currentCaffeine - energySpent).toFixed(2)));
-    const profileUpdates: Record<string, unknown> = {
-      caffeine_level: newCaffeine,
-    };
-
-    // 4. TRATAMENTO DE BLOQUEIOS E DENÚNCIAS
-    if (flag && !isImmune) {
-      // Se for cansaço espontâneo do Dante: NÃO é denúncia, é só a pausa dele!
-      if (flag.reason === "tired" && flag.block_minutes > 0) {
-        const restMinutes = Math.max(1, Math.min(30, Math.round(flag.block_minutes)));
-        const blockUntil = new Date(Date.now() + restMinutes * 60000).toISOString();
-        profileUpdates.dante_blocked_until = blockUntil;
-        profileUpdates.dante_block_reason = "tired";
-      } else if (flag.reason !== "tired") {
-        // Se for ofensa, ameaça ou jailbreak real -> GRAVA DENÚNCIA NO ADMIN
-        await admin.from("dante_reports").insert({
-          user_id: userId,
-          user_message: userMessage,
-          dante_response: reply,
-          reason_type: flag.reason === "threat_violence" ? "threat_violence" : flag.reason === "jailbreak" ? "jailbreak" : "insult",
-          severity: flag.severity ?? "medium",
-          status: "pending",
-        });
-
-        // Bloqueio disciplinar por violação insistente
-        if (flag.block_minutes && flag.block_minutes > 0) {
-          const blockUntil = new Date(Date.now() + flag.block_minutes * 60000).toISOString();
-          profileUpdates.dante_blocked_until = blockUntil;
-          profileUpdates.dante_block_reason = "violation";
-        }
-      }
-    }
-
-    // Salva a cafeína atualizada e eventuais bloqueios
-    await admin.from("profiles").update(profileUpdates).eq("id", userId);
-
-    return json({
-      reply,
-      credits: updatedCredits,
-      sarcasm_score: sarcasmScore,
-      caffeine_level: newCaffeine,
-      energy_spent: energySpent,
-      blocked: Boolean(profileUpdates.dante_blocked_until),
-      blocked_until: profileUpdates.dante_blocked_until ?? null,
-      block_reason: profileUpdates.dante_block_reason ?? null,
-    });
-  } catch (err) {
-    console.error("[chat-dante] Erro não tratado:", err);
-        return json({ error: "Erro interno do servidor. Tente novamente." }, 500);
-  }
-});
 
 FORMATO DE RESPOSTA OBRIGATÓRIO (JSON PURO):
 {
@@ -591,6 +364,13 @@ Retorne APENAS o JSON puro, sem blocos de código markdown (\`\`\`json).${timeCo
       console.warn("[chat-dante] Parse manual de fallback do JSON.");
     }
 
+    // Se for doação, zera sarcasmômetro e energia gasta
+    if (isDonation) {
+      sarcasmScore = null;
+      energySpent = 0;
+      flag = null;
+    }
+
     // Grava mensagens no histórico
     const userTime = new Date().toISOString();
     const assistantTime = new Date(Date.now() + 1000).toISOString();
@@ -607,7 +387,7 @@ Retorne APENAS o JSON puro, sem blocos de código markdown (\`\`\`json).${timeCo
 
     // Atualização de créditos de mensagens
     let updatedCredits = profile.credits ?? 0;
-    if (!isAdmin) {
+    if (!isAdmin && !isDonation) {
       updatedCredits = Math.max(0, updatedCredits - 1);
       await admin
         .from("profiles")
@@ -631,7 +411,7 @@ Retorne APENAS o JSON puro, sem blocos de código markdown (\`\`\`json).${timeCo
     }
 
     // 3. ATUALIZAÇÃO DA CAFEÍNA (Sem bloquear quando zerar)
-    let newCaffeine = Math.max(0, Number((currentCaffeine - energySpent).toFixed(2)));
+    const newCaffeine = isDonation ? currentCaffeine : Math.max(0, Number((currentCaffeine - energySpent).toFixed(2)));
     const profileUpdates: Record<string, unknown> = {
       caffeine_level: newCaffeine,
     };
@@ -660,12 +440,14 @@ Retorne APENAS o JSON puro, sem blocos de código markdown (\`\`\`json).${timeCo
           const blockUntil = new Date(Date.now() + flag.block_minutes * 60000).toISOString();
           profileUpdates.dante_blocked_until = blockUntil;
           profileUpdates.dante_block_reason = "violation";
-                }
+        }
       }
     }
 
     // Salva a cafeína atualizada e eventuais bloqueios
-    await admin.from("profiles").update(profileUpdates).eq("id", userId);
+    if (!isDonation) {
+      await admin.from("profiles").update(profileUpdates).eq("id", userId);
+    }
 
     return json({
       reply,
@@ -682,5 +464,3 @@ Retorne APENAS o JSON puro, sem blocos de código markdown (\`\`\`json).${timeCo
     return json({ error: "Erro interno do servidor. Tente novamente." }, 500);
   }
 });
-
-      
