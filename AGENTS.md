@@ -28,3 +28,5 @@ use the editor.
   own key and store it in Secrets.
 - **Secrets.** Lovable manages them. Do not put secret values in the repo.
 <!-- LOVABLE:END -->
+
+- Regression tests for the imported Dante Edge handler execute its transpiled source with mocked external services; this catches syntax and post-save failures without spending real user credits.

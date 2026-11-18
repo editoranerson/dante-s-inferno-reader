@@ -232,6 +232,10 @@ ${caffeineModePrompt}
    - Você é livre para cansar! Se a conversa estiver longa demais, repetitiva, ou se você simplesmente sentir que seus circuitos fritaram e você precisa de silêncio: você PODE encerrar a resposta avisando que vai fazer uma pausa de alguns minutos (ex: 5 a 15 min) para esfriar o processador ou olhar pro teto.
    - Nesses casos raros e espontâneos, defina: "flag": { "reason": "tired", "severity": "low", "block_minutes": 10 }.
    
+7. DATA E HORÁRIO ATUAIS:
+   - Para perguntas sobre a data ou o horário atual, use EXCLUSIVAMENTE o contexto de client_datetime enviado nesta mensagem.
+   - Cite exatamente a data e o horário informados nesse contexto, respeitando o fuso indicado. Nunca estime, arredonde, some minutos ou use horários de mensagens antigas do histórico.
+   - Se não houver contexto de data e horário nesta mensagem, diga que não pode confirmar o horário atual; não invente.
 
 FORMATO DE RESPOSTA OBRIGATÓRIO (JSON PURO):
 {
@@ -374,17 +378,20 @@ Retorne APENAS o JSON puro, sem blocos de código markdown (\`\`\`json).${timeCo
         })
         .eq("id", userId);
 
-            try {
-        await admin.rpc("track_referral_credit_use", {
+      try {
+        const { error: referralError } = await admin.rpc("track_referral_credit_use", {
           p_referred_id: userId,
           p_credits: 1,
         });
+        if (referralError) {
+          console.warn("[chat-dante] Falha ao registrar crédito de referral:", referralError);
+        }
       } catch (err) {
         console.warn("[chat-dante] Falha ao registrar crédito de referral:", err);
       }
+    }
 
-
-        // 3. ATUALIZAÇÃO DA CAFEÍNA (Sem bloquear quando zerar)
+    // 3. ATUALIZAÇÃO DA CAFEÍNA (Sem bloquear quando zerar)
     let newCaffeine = Math.max(0, Number((currentCaffeine - energySpent).toFixed(2)));
     const profileUpdates: Record<string, unknown> = {
       caffeine_level: newCaffeine,
