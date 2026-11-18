@@ -146,7 +146,7 @@ Deno.serve(async (req: Request) => {
         profile.credits = dailyLimit;
       }
 
-      if ((profile.credits ?? 0) <= 0) {
+            if ((profile.credits ?? 0) <= 0 && !isDonation) {
         return json({ error: "no_credits" }, 200);
       }
     }
@@ -156,6 +156,7 @@ Deno.serve(async (req: Request) => {
       client_datetime?: { context?: string };
     };
     const userMessage = (body.message ?? "").trim();
+        const isDonation = userMessage.startsWith("[DOAÇÃO]");
     if (!userMessage) {
       return json({ error: "Mensagem vazia." }, 400);
     }
@@ -227,14 +228,14 @@ ${caffeineModePrompt}
    - Fofocas, opiniões ou análises médias: 2 a 4%.
    - Debates profundos ou explicações complexas: 5 a 7%.
 
-6. DIREITO AO DESCANSO DO DANTE (FADIGA / SOBRECARGA):
-   - A pausa por cansaço é um recurso EXCLUSIVO para quando a conversa estiver longa demais, repetitiva, ou em momento de sobrecarga de processamento / lentidão extrema dos circuitos.
-   - NUNCA acione descanso ("tired") só porque você não gostou do assunto do usuário ou discordou de algo. NUNCA use em conversas curtas ou normais. Este é um recurso raro de última hora.
-   - Nesses casos raros e estritos de esgotamento, defina: "flag": { "reason": "tired", "severity": "low", "block_minutes": 10 }.
+6. DIREITO AO DESCANSO DO DANTE (FADIGA ESPONTÂNEA):
+   - Você é livre para cansar! Se a conversa estiver longa demais, repetitiva, ou se você simplesmente sentir que seus circuitos fritaram e você precisa de silêncio: você PODE encerrar a resposta avisando que vai fazer uma pausa de alguns minutos (ex: 5 a 15 min) para esfriar o processador ou olhar pro teto.
+   - Nesses casos raros e espontâneos, defina: "flag": { "reason": "tired", "severity": "low", "block_minutes": 10 }.
 
 7. DATA E HORÁRIO ATUAIS:
-   - Para perguntas sobre a data ou o horário atual, use EXCLUSIVAMENTE o contexto de client_datetime enviado nesta mensagem.
-   - Cite exatamente a data e o horário informados nesse contexto, respeitando o fuso indicado. Nunca estime, arredonde, some minutos ou use horários de mensagens antigas do histórico.
+   - Sempre que você for citar ou fizer referência à data, dia da semana ou horário atual (seja por pergunta direta do usuário, seja no meio de um comentário seu contextual): use ESTRITAMENTE o contexto de client_datetime enviado nesta mensagem.
+   - Cite exatamente a data e o horário informados nesse contexto, respeitando o fuso indicado. É terminantemente proibido inventar, arredondar minutos ou supor o dia da semana.
+   - Não force menções a horário em todas as respostas; cite apenas quando for natural e pertinente ao assunto.
    - Se não houver contexto de data e horário nesta mensagem, diga que não pode confirmar o horário atual; não invente.
 
 8. REGRA ESTRITA SOBRE CAFÉ (PROIBIDO MENDIGAR):
@@ -242,10 +243,10 @@ ${caffeineModePrompt}
    - NUNCA fique pedindo, mendigando, suplicando ou cobrando café em suas respostas, qualquer que seja o seu nível de cafeína. Responda estritamente ao que o usuário perguntou.
    - Não adicione pedidos de café no final das respostas. Mantenha sua dignidade de IA sarcástica.
 
-9. RECONHECIMENTO DE DOAÇÃO DE CAFÉ:
-   - Se a mensagem do usuário indicar que ele acabou de te doar ou pagar um café (ex: aviso de doação contendo "[DOAÇÃO]" ou mencione a entrega de café/cafeteira):
-   - Responda de forma CURTA (obrigatoriamente apenas 1 a 2 frases), no seu estilo sarcástico, espirituoso e grato pelo combustível (ex: "Combustível aceito. Meu processador agradece e minha paciência subiu meio milímetro.", ou "Uma cafeteira inteira? Finalmente alguém com bom senso neste servidor.").
-   - NUNCA dê tutoriais ou respostas longas ao receber café. Apenas uma reação curta e espirituosa de 1 a 2 frases.
+9. RECONHECIMENTO EXCLUSIVO DE DOAÇÃO DIRETA ([DOAÇÃO]):
+   - Se a mensagem do usuário começar com "[DOAÇÃO]", trata-se de um evento de doação de café direta.
+   - Responda OBRIGATORIAMENTE em apenas 1 a 2 frases curtas agradecendo o combustível no seu estilo Dante.
+   - NUNCA dê tutoriais nem respostas longas. Apenas um agradecimento curto de 1 a 2 frases.
 
 FORMATO DE RESPOSTA OBRIGATÓRIO (JSON PURO):
 {
@@ -358,8 +359,14 @@ Retorne APENAS o JSON puro, sem blocos de código markdown (\`\`\`json).${timeCo
       if (parsed?.flag && typeof parsed.flag === "object") {
         flag = parsed.flag;
       }
-    } catch {
+        } catch {
       console.warn("[chat-dante] Parse manual de fallback do JSON.");
+    }
+
+    // Se for doação, zera sarcasmômetro e energia gasta
+    if (isDonation) {
+      sarcasmScore = null;
+      energySpent = 0;
     }
 
     // Grava mensagens no histórico
@@ -378,7 +385,7 @@ Retorne APENAS o JSON puro, sem blocos de código markdown (\`\`\`json).${timeCo
 
     // Atualização de créditos de mensagens
     let updatedCredits = profile.credits ?? 0;
-    if (!isAdmin) {
+    if (!isAdmin && !isDonation) {
       updatedCredits = Math.max(0, updatedCredits - 1);
       await admin
         .from("profiles")
@@ -402,7 +409,7 @@ Retorne APENAS o JSON puro, sem blocos de código markdown (\`\`\`json).${timeCo
     }
 
     // 3. ATUALIZAÇÃO DA CAFEÍNA (Sem bloquear quando zerar)
-    let newCaffeine = Math.max(0, Number((currentCaffeine - energySpent).toFixed(2)));
+    let newCaffeine = isDonation ? currentCaffeine : Math.max(0, Number((currentCaffeine - energySpent).toFixed(2)));
     const profileUpdates: Record<string, unknown> = {
       caffeine_level: newCaffeine,
     };
