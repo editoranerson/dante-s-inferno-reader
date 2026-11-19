@@ -94,17 +94,14 @@ export function DanteChat() {
     }
   };
 
-  const handleCoffeeDonated = ({ item, caffeineAdded, bottleAdded }: CoffeeDonationEvent) => {
-    const details = [
-      caffeineAdded > 0 ? `+${caffeineAdded.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}% de cafeína` : '',
-      bottleAdded > 0 ? `+${bottleAdded.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}% na Garrafa Térmica` : '',
-    ].filter(Boolean).join(' · ');
+  const handleCoffeeDonated = ({ receipt }: CoffeeDonationEvent) => {
+    const list = receipt.items.map((i) => `${i.quantity}x ${i.name}`).join(', ');
     setMessages((prev) => [
       ...prev,
       {
         id: `coffee-${Date.now()}`,
         role: 'system',
-        content: `[DOAÇÃO] Você doou ${item.name}${details ? ` · ${details}` : ''}`,
+        content: `Você doou ${list} · ${receipt.total} Dantes · +${receipt.caffeine_added.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}% de cafeína`,
       },
     ]);
   };
