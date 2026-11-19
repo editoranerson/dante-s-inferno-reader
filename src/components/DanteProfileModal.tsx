@@ -116,7 +116,7 @@ export function DanteProfileModal({ onClose, onCoffeeDonated }: DanteProfileModa
     toast(`${formatCaffeine(result.transferred)} servidos sem gastar nenhum Dante!`, 'success');
   };
 
-  const caffeine = Number(profile?.caffeine_level ?? 50);
+  const caffeine = Number(profile?.caffeine_level ?? 80);
   const bottle = Number(profile?.caffeine_bottle ?? 0);
   const mode = getCaffeineMode(caffeine);
 
