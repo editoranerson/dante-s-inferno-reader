@@ -1144,6 +1144,7 @@ export type Database = {
           id: string
           item_id: string | null
           price_dantes: number
+          quantity: number
           user_id: string
         }
         Insert: {
@@ -1153,6 +1154,7 @@ export type Database = {
           id?: string
           item_id?: string | null
           price_dantes?: number
+          quantity?: number
           user_id: string
         }
         Update: {
@@ -1162,6 +1164,7 @@ export type Database = {
           id?: string
           item_id?: string | null
           price_dantes?: number
+          quantity?: number
           user_id?: string
         }
         Relationships: [
@@ -2309,6 +2312,7 @@ export type Database = {
       confirm_visit_retention: { Args: { p_visit_id: string }; Returns: Json }
       dante_wallet_apply_yield: { Args: never; Returns: Json }
       donate_dante_coffee: { Args: { p_item_id: string }; Returns: Json }
+      donate_dante_coffee_batch: { Args: { p_items: Json }; Returns: Json }
       ensure_affiliate_account: {
         Args: never
         Returns: {
