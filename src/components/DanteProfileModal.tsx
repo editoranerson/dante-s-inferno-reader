@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { X, ShieldCheck, Lock, Check, Coins, Image as ImageIcon, Droplet, Coffee, Thermometer, CupSoda } from 'lucide-react';
+import { X, ShieldCheck, Lock, Check, Coins, Image as ImageIcon, Droplet, Coffee, Thermometer, CupSoda, Minus, Plus } from 'lucide-react';
 import { waterFor, formatMl, ML_PER_MESSAGE } from '@/lib/water';
 import danteAvatar from '@/assets/dante-avatar.webp';
 import { supabase } from '@/lib/supabase';
@@ -10,7 +10,11 @@ import {
   formatCaffeine,
   getCaffeineMode,
   type CoffeeDonationEvent,
-  type CoffeeDonationResult,
+  type CoffeeBatchResult,
+  MAX_COFFEE_PER_ITEM,
+  cartTotal,
+  clampCoffeeQuantity,
+  receiptFromBatch,
   type BottleRefillResult,
   type DanteCoffeeItem,
 } from '@/lib/danteCoffee';
@@ -32,6 +36,7 @@ export function DanteProfileModal({ onClose, onCoffeeDonated }: DanteProfileModa
   const [msgCount, setMsgCount] = useState<number | null>(null);
   const [coffeeItems, setCoffeeItems] = useState<DanteCoffeeItem[]>([]);
   const [coffeeLoading, setCoffeeLoading] = useState(true);
+  const [cart, setCart] = useState<Record<string, number>>({});
 
   useEffect(() => {
     setSelected(getSelectedWallpaper());
@@ -70,27 +75,32 @@ export function DanteProfileModal({ onClose, onCoffeeDonated }: DanteProfileModa
     toast('Comprado e aplicado!', 'success');
   };
 
-  const donate = async (item: DanteCoffeeItem) => {
+  const total = cartTotal(coffeeItems, cart);
+  const changeQty = (id: string, delta: number) =>
+    setCart((prev) => ({ ...prev, [id]: clampCoffeeQuantity((prev[id] ?? 0) + delta) }));
+
+  const donate = async () => {
     if (!user) return toast('Entre na sua conta para doar um café.', 'error');
-    if ((profile?.points ?? 0) < item.price_dantes) return toast('Dantes insuficientes para esse café.', 'error');
-    setBusy(item.id);
-    const { data, error } = await supabase.rpc('donate_dante_coffee', { p_item_id: item.id });
-    if (error || !(data as CoffeeDonationResult | null)?.success) {
+    const picked = coffeeItems
+      .map((item) => ({ item_id: item.id, quantity: clampCoffeeQuantity(cart[item.id] ?? 0) }))
+      .filter((p) => p.quantity > 0);
+    if (picked.length === 0) return;
+    if ((profile?.points ?? 0) < total) return toast('Dantes insuficientes para esses cafés.', 'error');
+    setBusy('cart');
+    const { data, error } = await supabase.rpc('donate_dante_coffee_batch' as never, { p_items: picked } as never);
+    const result = data as CoffeeBatchResult | null;
+    if (error || !result?.success) {
       setBusy('');
-      const result = data as CoffeeDonationResult | null;
       return toast(result?.error || error?.message || 'A cafeteira recusou o pedido. Tente novamente.', 'error');
     }
-    const result = data as CoffeeDonationResult;
-    const previousCaffeine = Number(profile?.caffeine_level ?? 50);
-    const caffeineAdded = Math.max(0, Number(result.caffeine_level ?? previousCaffeine) - previousCaffeine);
-    const bottleAdded = Number(result.bottle_added ?? 0);
     await refreshProfile();
     setBusy('');
-    onCoffeeDonated?.({ item, caffeineAdded, bottleAdded });
+    setCart({});
+    onCoffeeDonated?.({ receipt: receiptFromBatch(result) });
     toast(
-      bottleAdded > 0
-        ? `Café entregue! ${formatCaffeine(bottleAdded)} do excedente foi para a Garrafa Térmica.`
-        : `${item.name} entregue ao Dante!`,
+      Number(result.bottle_added ?? 0) > 0
+        ? `Café entregue! ${formatCaffeine(result.bottle_added)} do excedente foi para a Garrafa Térmica.`
+        : 'Café entregue ao Dante!',
       'success',
     );
   };
@@ -198,7 +208,9 @@ export function DanteProfileModal({ onClose, onCoffeeDonated }: DanteProfileModa
                 <p className="rounded-xl border border-white/10 bg-white/5 p-4 text-center text-xs text-grape-200/60">A cafeteira está vazia. O admin ainda não cadastrou cafés.</p>
               ) : (
                 <div className="space-y-2">
-                  {coffeeItems.map((item) => (
+                  {coffeeItems.map((item) => {
+                    const qty = cart[item.id] ?? 0;
+                    return (
                     <article key={item.id} className="rounded-xl border border-white/10 bg-white/5 p-3">
                       <div className="flex items-start gap-3">
                         <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-gold-400/10 text-gold-400"><DanteCoffeeIcon icon={item.icon} /></div>
@@ -208,15 +220,34 @@ export function DanteProfileModal({ onClose, onCoffeeDonated }: DanteProfileModa
                           <p className="mt-1 text-xs font-medium text-gold-400">+{formatCaffeine(item.caffeine_pct)} cafeína · {item.price_dantes} Dantes</p>
                         </div>
                       </div>
-                      <button
-                        onClick={() => donate(item)}
-                        disabled={busy === item.id || (profile?.points ?? 0) < item.price_dantes}
-                        className="btn-primary mt-3 w-full py-2 text-xs"
-                      >
-                        <Coffee size={14} /> {busy === item.id ? 'Preparando...' : `Doar por ${item.price_dantes} Dantes`}
-                      </button>
+                      <div className="mt-3 flex items-center justify-end gap-3">
+                        <button
+                          type="button"
+                          onClick={() => changeQty(item.id, -1)}
+                          disabled={qty <= 0 || busy === 'cart'}
+                          aria-label={`Diminuir ${item.name}`}
+                          className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 text-grape-50 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:border-white/5 disabled:text-grape-200/25"
+                        ><Minus size={14} /></button>
+                        <span className="w-6 text-center font-dante text-base font-semibold text-grape-50" aria-live="polite">{qty}</span>
+                        <button
+                          type="button"
+                          onClick={() => changeQty(item.id, 1)}
+                          disabled={qty >= MAX_COFFEE_PER_ITEM || busy === 'cart'}
+                          aria-label={`Aumentar ${item.name}`}
+                          className="flex h-8 w-8 items-center justify-center rounded-full border border-gold-400/40 text-gold-400 transition hover:bg-gold-400/10 disabled:cursor-not-allowed disabled:border-white/5 disabled:text-grape-200/25"
+                        ><Plus size={14} /></button>
+                      </div>
                     </article>
-                  ))}
+                    );
+                  })}
+                  <button
+                    onClick={donate}
+                    disabled={busy === 'cart' || total <= 0 || (profile?.points ?? 0) < total}
+                    className="btn-primary sticky bottom-0 mt-2 w-full py-2.5 text-sm"
+                  >
+                    <Coffee size={15} />
+                    {busy === 'cart' ? 'Preparando...' : total <= 0 ? 'Escolha seus cafés' : (profile?.points ?? 0) < total ? `Faltam Dantes (${total})` : `Doar por ${total} Dantes`}
+                  </button>
                 </div>
               )}
             </section>

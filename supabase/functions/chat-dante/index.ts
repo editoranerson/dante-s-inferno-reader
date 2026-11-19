@@ -33,6 +33,44 @@ function json(body: unknown, status = 200) {
   });
 }
 
+const DONATION_WINDOW_MS = 10 * 60 * 1000;
+const DONATION_MARKER = "[EVENTO_DOAÇÃO_CAFÉ]";
+const RECEIPT_PREFIX = "[RECIBO_CAFE]";
+
+type DonationRow = {
+  quantity: number | null;
+  price_dantes: number;
+  caffeine_added: number;
+  bottle_stored: number;
+  created_at: string;
+  dante_coffee_items: { name: string; icon: string } | null;
+};
+
+function buildDonationReceipt(donorName: string, rows: DonationRow[]) {
+  const items = rows.map((r) => ({
+    name: r.dante_coffee_items?.name ?? "Café",
+    icon: r.dante_coffee_items?.icon ?? "coffee",
+    quantity: Math.max(1, Number(r.quantity ?? 1)),
+    price: Number(r.price_dantes ?? 0),
+  }));
+  const total = items.reduce((sum, i) => sum + i.price, 0);
+  const caffeineAdded = Number(rows[0]?.caffeine_added ?? 0);
+  const bottleAdded = Number(rows[0]?.bottle_stored ?? 0);
+  const list = items.map((i) => `${i.quantity}x ${i.name}`).join(", ");
+  const text = `${donorName} te deu ${list} (${total} Dantes, +${caffeineAdded}% de cafeína).`;
+  return { items, total, caffeine_added: caffeineAdded, bottle_added: bottleAdded, text };
+}
+
+function historyText(content: string): string {
+  if (!content.startsWith(RECEIPT_PREFIX)) return content;
+  try {
+    const parsed = JSON.parse(content.slice(RECEIPT_PREFIX.length));
+    return `${DONATION_MARKER} ${parsed.text ?? "Doação de café."}`;
+  } catch {
+    return `${DONATION_MARKER} Doação de café.`;
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -80,7 +118,7 @@ Deno.serve(async (req: Request) => {
     const { data: profile } = await admin
       .from("profiles")
       .select(
-        "id, role, plan, plan_expires_at, credits, messages_today, last_message_date, caffeine_level, caffeine_bottle, dante_blocked_until, dante_block_reason, dante_immunity",
+        "id, full_name, role, plan, plan_expires_at, credits, messages_today, last_message_date, caffeine_level, caffeine_bottle, dante_blocked_until, dante_block_reason, dante_immunity",
       )
       .eq("id", userId)
       .maybeSingle();
@@ -92,8 +130,50 @@ Deno.serve(async (req: Request) => {
     const isAdmin = profile.role === "admin";
     const isImmune = isAdmin || Boolean(profile.dante_immunity);
 
+    const body = (await req.json().catch(() => ({}))) as {
+      message?: string;
+      event_type?: string;
+      client_datetime?: { context?: string };
+    };
+    // Doação só é reconhecida pelo evento estruturado e confirmada no banco; texto digitado nunca isenta créditos.
+    const isDonation = body.event_type === "coffee_donation";
+    let userMessage = (body.message ?? "").trim().replace(/^\[EVENTO_DOA[ÇC][ÃA]O_CAF[ÉE]\]\s*/i, "");
+    let storedUserMessage = userMessage;
+    if (isDonation) {
+      const since = new Date(Date.now() - DONATION_WINDOW_MS).toISOString();
+      const { data: donationRows } = await admin
+        .from("dante_coffee_donations")
+        .select("quantity, price_dantes, caffeine_added, bottle_stored, created_at, dante_coffee_items(name, icon)")
+        .eq("user_id", userId)
+        .gte("created_at", since)
+        .order("created_at", { ascending: false })
+        .limit(50);
+      const rows = (donationRows ?? []) as DonationRow[];
+      if (rows.length === 0) {
+        return json({ error: "donation_not_found" }, 400);
+      }
+      const batchAt = rows[0].created_at;
+      const { data: acked } = await admin
+        .from("chat_messages")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("source", "coffee_donation")
+        .gte("created_at", batchAt)
+        .limit(1);
+      if ((acked ?? []).length > 0) {
+        return json({ error: "donation_already_acknowledged" }, 409);
+      }
+      const batch = rows.filter((r) => r.created_at === batchAt);
+      const receipt = buildDonationReceipt(String(profile.full_name ?? "").trim() || "Um leitor", batch);
+      userMessage = `${DONATION_MARKER} ${receipt.text}`;
+      storedUserMessage = `${RECEIPT_PREFIX}${JSON.stringify(receipt)}`;
+    }
+    if (!userMessage) {
+      return json({ error: "Mensagem vazia." }, 400);
+    }
+
     // 1. VERIFICAÇÃO DE BLOQUEIO ATIVO (Cansaço ou Violação)
-    if (!isImmune && profile.dante_blocked_until) {
+    if (!isImmune && !isDonation && profile.dante_blocked_until) {
       const blockedUntil = new Date(profile.dante_blocked_until).getTime();
       const now = Date.now();
       if (blockedUntil > now) {
@@ -116,15 +196,6 @@ Deno.serve(async (req: Request) => {
     // Admin usa chave dedicada quando disponível
     const activeApiKey = isAdmin && adminApiKey ? adminApiKey : apiKey;
 
-    const body = (await req.json().catch(() => ({}))) as {
-      message?: string;
-      client_datetime?: { context?: string };
-    };
-    const userMessage = (body.message ?? "").trim();
-    const isDonation = userMessage.startsWith("[DOAÇÃO]");
-    if (!userMessage) {
-      return json({ error: "Mensagem vazia." }, 400);
-    }
 
     // 2. CONTROLE DIÁRIO DE CRÉDITOS (doação não usa créditos)
     if (!isAdmin && !isDonation) {
@@ -243,8 +314,8 @@ ${caffeineModePrompt}
    - NUNCA fique pedindo, mendigando, suplicando ou cobrando café em suas respostas, qualquer que seja o seu nível de cafeína. Responda estritamente ao que o usuário perguntou.
    - Não adicione pedidos de café no final das respostas. Mantenha sua dignidade de IA sarcástica.
 
-9. RECONHECIMENTO EXCLUSIVO DE DOAÇÃO DIRETA ([DOAÇÃO]):
-   - Se a mensagem do usuário começar com "[DOAÇÃO]", trata-se de um evento de doação de café direta.
+9. RECONHECIMENTO EXCLUSIVO DE DOAÇÃO DIRETA ([EVENTO_DOAÇÃO_CAFÉ]):
+   - Se a mensagem do usuário começar com "[EVENTO_DOAÇÃO_CAFÉ]", trata-se de um evento de doação de café confirmado pelo sistema, com o nome de quem doou e a quantidade de cada café.
    - RESPONDA EXCLUSIVAMENTE agradecendo o gesto em 1 a 2 frases curtas.
    - Se o usuário apenas comentar que doou em uma mensagem comum sem a tag inicial, responda normalmente à mensagem.
    - NUNCA dê tutoriais nem respostas longas. Apenas um agradecimento curto de 1 a 2 frases.
@@ -280,7 +351,7 @@ Retorne APENAS o JSON puro, sem blocos de código markdown (\`\`\`json).${timeCo
     for (const msg of history) {
       contents.push({
         role: msg.role === "assistant" ? "model" : "user",
-        parts: [{ text: msg.content }],
+        parts: [{ text: historyText(msg.content) }],
       });
     }
     contents.push({ role: "user", parts: [{ text: userMessage }] });
@@ -375,7 +446,13 @@ Retorne APENAS o JSON puro, sem blocos de código markdown (\`\`\`json).${timeCo
     const userTime = new Date().toISOString();
     const assistantTime = new Date(Date.now() + 1000).toISOString();
     await admin.from("chat_messages").insert([
-      { user_id: userId, role: "user", content: userMessage, created_at: userTime },
+      {
+        user_id: userId,
+        role: "user",
+        content: storedUserMessage,
+        created_at: userTime,
+        ...(isDonation ? { source: "coffee_donation" } : {}),
+      },
       {
         user_id: userId,
         role: "assistant",
@@ -451,6 +528,7 @@ Retorne APENAS o JSON puro, sem blocos de código markdown (\`\`\`json).${timeCo
 
     return json({
       reply,
+      donation: isDonation,
       credits: updatedCredits,
       sarcasm_score: sarcasmScore,
       caffeine_level: newCaffeine,

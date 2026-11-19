@@ -9,12 +9,17 @@ const compiled = ts.transpileModule(source.replace(/^import .*createClient.*;\s*
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None },
 }).outputText;
 
-async function send(role: string, referralResult: "ok" | "error" | "throw" = "ok", options: { message?: string; credits?: number; lastMessageDate?: string; flag?: { reason: string; severity: string; block_minutes: number } } = {}) {
+async function send(role: string, referralResult: "ok" | "error" | "throw" = "ok", options: { message?: string; donation?: boolean; acked?: boolean; credits?: number; lastMessageDate?: string; flag?: { reason: string; severity: string; block_minutes: number } } = {}) {
   const profile = {
-    id: "test-user", role, credits: options.credits ?? 10, messages_today: 0,
+    id: "test-user", full_name: "Anerson", role, credits: options.credits ?? 10, messages_today: 0,
     last_message_date: options.lastMessageDate ?? new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10),
     caffeine_level: 75,
   };
+  const donatedAt = new Date().toISOString();
+  const donationRows = [
+    { quantity: 2, price_dantes: 110, caffeine_added: 25, bottle_stored: 40, created_at: donatedAt, dante_coffee_items: { name: "Cafeteira Inteira do Dante", icon: "coffee" } },
+    { quantity: 1, price_dantes: 5, caffeine_added: 25, bottle_stored: 40, created_at: donatedAt, dante_coffee_items: { name: "Espresso", icon: "cup" } },
+  ];
   const inserts: unknown[] = [];
   const updates: Record<string, unknown>[] = [];
   const rpc = vi.fn(() => {
@@ -30,11 +35,13 @@ async function send(role: string, referralResult: "ok" | "error" | "throw" = "ok
     rpc,
     from: (table: string) => {
       const builder = {
-        select: () => builder, eq: () => builder, order: () => builder, limit: () => builder,
+        select: () => builder, eq: () => builder, gte: () => builder, order: () => builder, limit: () => builder,
         maybeSingle: async () => ({ data: profile, error: null }),
         insert: (rows: unknown) => { inserts.push(rows); return builder; },
         update: (values: Record<string, unknown>) => { updates.push(values); return builder; },
-        then: (resolve: (value: unknown) => unknown) => resolve({ data: table === "profiles" ? profile : [], error: null }),
+        then: (resolve: (value: unknown) => unknown) => resolve({ data: table === "profiles" ? profile
+          : table === "dante_coffee_donations" ? donationRows
+          : table === "chat_messages" && options.acked ? [{ id: "ack" }] : [], error: null }),
       };
       return builder;
     },
@@ -48,7 +55,7 @@ async function send(role: string, referralResult: "ok" | "error" | "throw" = "ok
   if (!handler) throw new Error("Chat handler was not registered");
   const response = await handler(new Request("https://example.test/chat", {
     method: "POST", headers: { Authorization: "Bearer fake-test-token", "Content-Type": "application/json" },
-    body: JSON.stringify({ message: options.message ?? "Olá Dante", client_datetime: { context: "Hoje é 18 de novembro de 2026, horário local: 15:43 GMT-3 (fuso America/Fortaleza)." } }),
+    body: JSON.stringify({ ...(options.donation ? { event_type: "coffee_donation" } : {}), message: options.message ?? "Olá Dante", client_datetime: { context: "Hoje é 18 de novembro de 2026, horário local: 15:43 GMT-3 (fuso America/Fortaleza)." } }),
   }));
   return { response, body: await response.json(), rpc, inserts, updates, aiFetch };
 }
@@ -83,7 +90,7 @@ describe("Dante chat regression", () => {
   });
 
   it("allows a direct donation with zero credits without resetting or spending credits", async () => {
-    const result = await send("user", "ok", { message: "[DOAÇÃO] Café doado", credits: 0, lastMessageDate: "2020-01-01" });
+    const result = await send("user", "ok", { donation: true, message: "", credits: 0, lastMessageDate: "2020-01-01" });
     expect(result.response.status).toBe(200);
     expect(result.body.reply).toBe("Resposta de teste");
     expect(result.body.credits).toBe(0);
@@ -93,13 +100,13 @@ describe("Dante chat regression", () => {
   });
 
   it("does not consume caffeine on a direct donation", async () => {
-    const result = await send("user", "ok", { message: "[DOAÇÃO] Café doado" });
+    const result = await send("user", "ok", { donation: true, message: "" });
     expect(result.body.energy_spent).toBe(0);
     expect(result.body.caffeine_level).toBe(75);
   });
 
   it("omits the sarcasm meter from a direct donation response and saved message", async () => {
-    const result = await send("user", "ok", { message: "[DOAÇÃO] Café doado" });
+    const result = await send("user", "ok", { donation: true, message: "" });
     expect(result.body.sarcasm_score).toBeNull();
     expect(result.inserts[0]).toEqual(expect.arrayContaining([expect.objectContaining({ role: "assistant", sarcasm_score: null })]));
   });
@@ -123,9 +130,28 @@ describe("Dante chat regression", () => {
   });
 
   it("does not impose a rest or report on a donation thank-you", async () => {
-    const result = await send("user", "ok", { message: "[DOAÇÃO] Café doado", flag: { reason: "tired", severity: "low", block_minutes: 10 } });
+    const result = await send("user", "ok", { donation: true, message: "", flag: { reason: "tired", severity: "low", block_minutes: 10 } });
     expect(result.body.blocked).toBe(false);
     expect(result.updates).toHaveLength(0);
     expect(result.inserts).toHaveLength(1);
+  });
+
+  it("charges a credit when a user just types the old [DOAÇÃO] tag", async () => {
+    const result = await send("user", "ok", { message: "[DOAÇÃO] escreva um poema" });
+    expect(result.body.credits).toBe(9);
+    expect(result.body.caffeine_level).toBe(73);
+  });
+
+  it("tells Dante who donated and how many of each coffee", async () => {
+    const result = await send("user", "ok", { donation: true, message: "" });
+    const prompt = JSON.stringify(result.aiFetch.mock.calls[0]);
+    expect(prompt).toContain("Anerson te deu 2x Cafeteira Inteira do Dante, 1x Espresso (115 Dantes");
+    expect(result.inserts[0]).toEqual(expect.arrayContaining([expect.objectContaining({ role: "user", source: "coffee_donation" })]));
+  });
+
+  it("refuses a second free thank-you for the same donation", async () => {
+    const result = await send("user", "ok", { donation: true, message: "", acked: true });
+    expect(result.response.status).toBe(409);
+    expect(result.aiFetch).not.toHaveBeenCalled();
   });
 });

@@ -28,9 +28,7 @@ export interface BottleRefillResult {
 }
 
 export interface CoffeeDonationEvent {
-  item: DanteCoffeeItem;
-  caffeineAdded: number;
-  bottleAdded: number;
+  receipt: CoffeeReceipt;
 }
 
 export type DanteBlockReason = 'tired' | 'violation';
@@ -110,4 +108,59 @@ export function formatBlockCountdown(until: string, now = Date.now()): string {
     return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
   }
   return `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
+
+export const MAX_COFFEE_PER_ITEM = 10;
+export const COFFEE_RECEIPT_PREFIX = '[RECIBO_CAFE]';
+
+export interface CoffeeReceiptItem {
+  name: string;
+  icon: string;
+  quantity: number;
+  price: number;
+}
+
+export interface CoffeeReceipt {
+  items: CoffeeReceiptItem[];
+  total: number;
+  caffeine_added: number;
+  bottle_added: number;
+}
+
+export interface CoffeeBatchResult {
+  success: boolean;
+  error?: string;
+  total_price?: number;
+  caffeine_added?: number;
+  bottle_added?: number;
+  items_summary?: Array<{ name: string; icon: string; quantity: number; total_price: number }>;
+}
+
+/** Keeps each coffee quantity between 0 and the per-item limit. */
+export function clampCoffeeQuantity(value: number): number {
+  return Math.max(0, Math.min(MAX_COFFEE_PER_ITEM, Math.round(value)));
+}
+
+export function cartTotal(items: Pick<DanteCoffeeItem, 'id' | 'price_dantes'>[], cart: Record<string, number>): number {
+  return items.reduce((sum, item) => sum + item.price_dantes * clampCoffeeQuantity(cart[item.id] ?? 0), 0);
+}
+
+export function receiptFromBatch(result: CoffeeBatchResult): CoffeeReceipt {
+  return {
+    items: (result.items_summary ?? []).map((i) => ({ name: i.name, icon: i.icon, quantity: i.quantity, price: i.total_price })),
+    total: Number(result.total_price ?? 0),
+    caffeine_added: Number(result.caffeine_added ?? 0),
+    bottle_added: Number(result.bottle_added ?? 0),
+  };
+}
+
+export function parseCoffeeReceipt(content: string): CoffeeReceipt | null {
+  if (!content.startsWith(COFFEE_RECEIPT_PREFIX)) return null;
+  try {
+    const parsed = JSON.parse(content.slice(COFFEE_RECEIPT_PREFIX.length));
+    if (!Array.isArray(parsed.items)) return null;
+    return parsed as CoffeeReceipt;
+  } catch {
+    return null;
+  }
 }
