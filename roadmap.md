@@ -1,8 +1,8 @@
 # Roadmap
 
 ## Correção e publicação solicitadas agora
-- [ ] Remover duplicações e corrigir o Chat Dante, mantendo descanso original e agradecimento direto sem consumo.
-- [ ] Executar testes sem créditos reais e publicar a função no Supabase.
+- [x] Remover duplicações e corrigir o Chat Dante, mantendo descanso original e agradecimento direto sem consumo.
+- [x] Executar 10 testes sem créditos reais e publicar chat-dante no Supabase (publicação confirmada pela ferramenta).
 - [ ] Confirmar conversa real após publicação: depende de sessão no Supabase externo; não disponível aqui.
 
 ## Correção solicitada do chat
