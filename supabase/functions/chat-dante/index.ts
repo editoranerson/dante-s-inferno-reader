@@ -445,13 +445,13 @@ Retorne APENAS o JSON puro, sem blocos de código markdown (\`\`\`json).${timeCo
     // Grava mensagens no histórico
     const userTime = new Date().toISOString();
     const assistantTime = new Date(Date.now() + 1000).toISOString();
-    await admin.from("chat_messages").insert([
+        await admin.from("chat_messages").insert([
       {
         user_id: userId,
         role: "user",
         content: storedUserMessage,
         created_at: userTime,
-        ...(isDonation ? { source: "coffee_donation" } : {}),
+        source: isDonation ? "coffee_donation" : "chat",
       },
       {
         user_id: userId,
@@ -459,6 +459,7 @@ Retorne APENAS o JSON puro, sem blocos de código markdown (\`\`\`json).${timeCo
         content: reply,
         created_at: assistantTime,
         sarcasm_score: sarcasmScore,
+        source: "chat",
       },
     ]);
 
