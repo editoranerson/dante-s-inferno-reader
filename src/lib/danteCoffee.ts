@@ -5,6 +5,7 @@ export interface DanteCoffeeItem {
   icon: string;
   price_dantes: number;
   caffeine_pct: number;
+  dante_rating?: number | null;
   is_active: boolean;
   sort_order: number;
   created_at?: string;

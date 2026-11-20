@@ -12,6 +12,7 @@ const EMPTY = {
   icon: 'coffee',
   price_dantes: 15,
   caffeine_pct: 20,
+  dante_rating: 5,
   sort_order: 0,
   is_active: true,
 };
@@ -54,6 +55,7 @@ export function DanteCoffeeAdmin() {
       icon: item.icon,
       price_dantes: item.price_dantes,
       caffeine_pct: item.caffeine_pct,
+      dante_rating: Number(item.dante_rating ?? 5),
       sort_order: item.sort_order,
       is_active: item.is_active,
     });
@@ -62,6 +64,10 @@ export function DanteCoffeeAdmin() {
 
   const save = async () => {
     if (!form.name.trim()) return toast('Dê um nome ao café.', 'error');
+    if (form.dante_rating < 0 || form.dante_rating > 10) {
+      toast({ title: 'A nota do Dante vai de 0 a 10', variant: 'destructive' });
+      return;
+    }
     if (form.price_dantes <= 0 || form.caffeine_pct <= 0) {
       return toast('Preço e cafeína precisam ser maiores que zero.', 'error');
     }
@@ -122,7 +128,7 @@ export function DanteCoffeeAdmin() {
                     <span className="rounded-full bg-white/5 px-2 py-0.5 text-[10px] text-grape-200/60">#{item.sort_order}</span>
                   </div>
                   <p className="mt-1 text-xs text-grape-200/60">{item.description}</p>
-                  <p className="mt-2 text-sm text-gold-400">{item.price_dantes} Dantes · +{formatCaffeine(item.caffeine_pct)} cafeína</p>
+                  <p className="mt-2 text-sm text-gold-400">{item.price_dantes} Dantes · +{formatCaffeine(item.caffeine_pct)} cafeína · Nota do Dante: {Number(item.dante_rating ?? 5)}/10</p>
                 </div>
               </div>
               <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-white/10 pt-3">
@@ -157,6 +163,10 @@ export function DanteCoffeeAdmin() {
             <div>
               <label className="label">Cafeína (%)</label>
               <input type="number" min="0.01" step="0.01" className="input" value={form.caffeine_pct} onChange={(e) => setForm({ ...form, caffeine_pct: Number(e.target.value) })} />
+            </div>
+            <div>
+              <label className="label">Nota do Dante (0 a 10)</label>
+              <input type="number" min="0" max="10" step="0.5" className="input" value={form.dante_rating} onChange={(e) => setForm({ ...form, dante_rating: Number(e.target.value) })} />
             </div>
             <div>
               <label className="label">Ícone</label>

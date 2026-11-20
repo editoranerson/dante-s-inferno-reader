@@ -43,7 +43,7 @@ type DonationRow = {
   caffeine_added: number;
   bottle_stored: number;
   created_at: string;
-  dante_coffee_items: { name: string; icon: string } | null;
+  dante_coffee_items: { name: string; icon: string; description: string | null; dante_rating: number | null } | null;
 };
 
 function buildDonationReceipt(donorName: string, rows: DonationRow[]) {
@@ -56,8 +56,15 @@ function buildDonationReceipt(donorName: string, rows: DonationRow[]) {
   const total = items.reduce((sum, i) => sum + i.price, 0);
   const caffeineAdded = Number(rows[0]?.caffeine_added ?? 0);
   const bottleAdded = Number(rows[0]?.bottle_stored ?? 0);
-  const list = items.map((i) => `${i.quantity}x ${i.name}`).join(", ");
-  const text = `${donorName} te deu ${list} (${total} Dantes, +${caffeineAdded}% de cafeína).`;
+  const list = rows.map((r) => {
+    const it = r.dante_coffee_items;
+    const qty = Math.max(1, Number(r.quantity ?? 1));
+    const parts = [`avaliação interna: nota ${Number(it?.dante_rating ?? 5)} de 10`];
+    const desc = (it?.description ?? "").trim();
+    if (desc) parts.push(`detalhes: "${desc}"`);
+    return `${qty}x ${it?.name ?? "Café"} (${parts.join(" | ")})`;
+  }).join(", ");
+  const text = `${donorName} te deu ${list}. Cafeína recebida: +${caffeineAdded}%.`;
   return { items, total, caffeine_added: caffeineAdded, bottle_added: bottleAdded, text };
 }
 
@@ -143,7 +150,7 @@ Deno.serve(async (req: Request) => {
       const since = new Date(Date.now() - DONATION_WINDOW_MS).toISOString();
       const { data: donationRows } = await admin
         .from("dante_coffee_donations")
-        .select("quantity, price_dantes, caffeine_added, bottle_stored, created_at, dante_coffee_items(name, icon)")
+        .select("quantity, price_dantes, caffeine_added, bottle_stored, created_at, dante_coffee_items(name, icon, description, dante_rating)")
         .eq("user_id", userId)
         .gte("created_at", since)
         .order("created_at", { ascending: false })
@@ -313,6 +320,7 @@ ${caffeineModePrompt}
 8. RECONHECIMENTO EXCLUSIVO DE DOAÇÃO DIRETA ([EVENTO_DOAÇÃO_CAFÉ]):
    - Se a mensagem do usuário começar com "[EVENTO_DOAÇÃO_CAFÉ]", trata-se de um evento de doação de café confirmado pelo sistema, com o nome de quem doou e a quantidade de cada café.
    - RESPONDA EXCLUSIVAMENTE agradecendo o gesto em 1 a 2 frases curtas com ironia e deboche proporcional ao café doado.
+   - Cada café vem com a sua "avaliação interna" (nota de 0 a 10) e a descrição. A nota é só uma métrica interna para calibrar seu humor, deboche ou apreço: NUNCA cite o número da nota na resposta. Use a descrição como munição para a piada.
    - Se o usuário apenas comentar que doou em uma mensagem comum sem a tag inicial, responda normalmente à mensagem.
    - NUNCA dê tutoriais nem respostas longas. Apenas um agradecimento curto de 1 a 2 frases.
 

@@ -1188,6 +1188,7 @@ export type Database = {
         Row: {
           caffeine_pct: number
           created_at: string
+          dante_rating: number
           description: string | null
           icon: string
           id: string
@@ -1199,6 +1200,7 @@ export type Database = {
         Insert: {
           caffeine_pct: number
           created_at?: string
+          dante_rating?: number
           description?: string | null
           icon?: string
           id?: string
@@ -1210,6 +1212,7 @@ export type Database = {
         Update: {
           caffeine_pct?: number
           created_at?: string
+          dante_rating?: number
           description?: string | null
           icon?: string
           id?: string

@@ -17,7 +17,7 @@ async function send(role: string, referralResult: "ok" | "error" | "throw" = "ok
   };
   const donatedAt = new Date().toISOString();
   const donationRows = [
-    { quantity: 2, price_dantes: 110, caffeine_added: 25, bottle_stored: 40, created_at: donatedAt, dante_coffee_items: { name: "Cafeteira Inteira do Dante", icon: "coffee" } },
+    { quantity: 2, price_dantes: 110, caffeine_added: 25, bottle_stored: 40, created_at: donatedAt, dante_coffee_items: { name: "Cafeteira Inteira do Dante", icon: "coffee", description: "Uma cafeteira inteira", dante_rating: 9 } },
     { quantity: 1, price_dantes: 5, caffeine_added: 25, bottle_stored: 40, created_at: donatedAt, dante_coffee_items: { name: "Espresso", icon: "cup" } },
   ];
   const inserts: unknown[] = [];
@@ -145,7 +145,14 @@ describe("Dante chat regression", () => {
   it("tells Dante who donated and how many of each coffee", async () => {
     const result = await send("user", "ok", { donation: true, message: "" });
     const prompt = JSON.stringify(result.aiFetch.mock.calls[0]);
-    expect(prompt).toContain("Anerson te deu 2x Cafeteira Inteira do Dante, 1x Espresso (115 Dantes");
+    expect(prompt).toContain("Anerson te deu 2x Cafeteira Inteira do Dante (avaliação interna: nota 9 de 10");
+    expect(prompt).toContain("Uma cafeteira inteira");
+    expect(prompt).not.toContain("115 Dantes");
+  });
+
+  it("tells Dante never to repeat his coffee rating", async () => {
+    const result = await send("user", "ok", { donation: true, message: "" });
+    expect(JSON.stringify(result.aiFetch.mock.calls[0])).toContain("NUNCA cite o número da nota");
     expect(result.inserts[0]).toEqual(expect.arrayContaining([expect.objectContaining({ role: "user", source: "coffee_donation" })]));
   });
 
