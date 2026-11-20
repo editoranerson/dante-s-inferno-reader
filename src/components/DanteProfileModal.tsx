@@ -218,7 +218,7 @@ export function DanteProfileModal({ onClose, onCoffeeDonated }: DanteProfileModa
                           <h4 className="text-sm font-semibold text-grape-50">{item.name}</h4>
                           <p className="mt-0.5 text-[11px] leading-relaxed text-grape-200/50">{item.description}</p>
                           <p className="mt-1 text-xs font-medium text-gold-400">+{formatCaffeine(item.caffeine_pct)} cafeína · {item.price_dantes} Dantes</p>
-                          <p className="mt-0.5 text-[11px] font-semibold text-grape-200/80">Nota do Dante sobre o café: {Number(item.dante_rating ?? 5)}/10</p>
+                          <p className="mt-0.5 text-[11px] font-semibold text-grape-200/80">Nota do Dante sobre o café: {Number(item.dante_rating ?? 5) < 0 ? '< 0' : `${Number(item.dante_rating ?? 5)}/10`}</p>
                         </div>
                       </div>
                       <div className="mt-3 flex items-center justify-end gap-3">
