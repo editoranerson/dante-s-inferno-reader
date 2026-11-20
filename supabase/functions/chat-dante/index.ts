@@ -425,6 +425,7 @@ Retorne APENAS o JSON puro, sem blocos de código markdown (\`\`\`json).${timeCo
     let sarcasmScore: number | null = null;
     let energySpent = 2;
     let flag: { reason: string; severity: string; block_minutes: number } | null = null;
+    let parsed: any = null;
 
     try {
       const cleaned = rawReply.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
