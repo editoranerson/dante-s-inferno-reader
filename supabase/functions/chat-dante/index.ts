@@ -427,7 +427,7 @@ Retorne APENAS o JSON puro, sem blocos de código markdown (\`\`\`json).${timeCo
 
     try {
       const cleaned = rawReply.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
-      const parsed = JSON.parse(cleaned);
+      parsed = JSON.parse(cleaned);
 
       if (parsed?.reply && typeof parsed.reply === "string") {
         reply = parsed.reply;
