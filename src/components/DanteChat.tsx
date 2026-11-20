@@ -153,10 +153,11 @@ export function DanteChat() {
 
   const handleCoffeeDonated = async ({ receipt }: CoffeeDonationEvent) => {
     setShowProfile(false);
+    const receiptId = `coffee-${Date.now()}`;
     setMessages((prev) => [
       ...prev,
       {
-        id: `coffee-${Date.now()}`,
+        id: receiptId,
         role: "user",
         content: "",
         receipt,

@@ -65,7 +65,7 @@ function buildDonationReceipt(donorName: string, rows: DonationRow[]) {
     return `${qty}x ${it?.name ?? "Café"} (${parts.join(" | ")})`;
   }).join(", ");
   const text = `${donorName} te deu ${list}. Cafeína recebida: +${caffeineAdded}%.`;
-  return { items, total, caffeine_added: caffeineAdded, bottle_added: bottleAdded, text };
+  return { items, total, caffeine_added: caffeineAdded, bottle_added: bottleAdded, accepted: true, text };
 }
 
 function historyText(content: string): string {
@@ -146,6 +146,10 @@ Deno.serve(async (req: Request) => {
     const isDonation = body.event_type === "coffee_donation";
     let userMessage = (body.message ?? "").trim().replace(/^\[EVENTO_DOA[ÇC][ÃA]O_CAF[ÉE]\]\s*/i, "");
     let storedUserMessage = userMessage;
+    let coffeeAccepted = true;
+    let revertedCaffeine = 0;
+    let batch: DonationRow[] = [];
+    let receipt: ReturnType<typeof buildDonationReceipt> | null = null;
     if (isDonation) {
       const since = new Date(Date.now() - DONATION_WINDOW_MS).toISOString();
       const { data: donationRows } = await admin
@@ -170,10 +174,11 @@ Deno.serve(async (req: Request) => {
       if ((acked ?? []).length > 0) {
         return json({ error: "donation_already_acknowledged" }, 409);
       }
-      const batch = rows.filter((r) => r.created_at === batchAt);
-      const receipt = buildDonationReceipt(String(profile.full_name ?? "").trim() || "Um leitor", batch);
-      userMessage = `${DONATION_MARKER} ${receipt.text}`;
-      storedUserMessage = `${RECEIPT_PREFIX}${JSON.stringify(receipt)}`;
+      batch = rows.filter((r) => r.created_at === batchAt);
+      const builtReceipt = buildDonationReceipt(String(profile.full_name ?? "").trim() || "Um leitor", batch);
+      receipt = builtReceipt;
+      userMessage = `${DONATION_MARKER} ${builtReceipt.text}`;
+      storedUserMessage = `${RECEIPT_PREFIX}${JSON.stringify(builtReceipt)}`;
     }
     if (!userMessage) {
       return json({ error: "Mensagem vazia." }, 400);
@@ -449,25 +454,29 @@ Retorne APENAS o JSON puro, sem blocos de código markdown (\`\`\`json).${timeCo
 
     // Se for doação, zera sarcasmômetro e energia gasta
     if (isDonation) {
-          let coffeeAccepted = true;
-    if (isDonation && typeof parsed?.coffee_accepted === "boolean") {
-      coffeeAccepted = parsed.coffee_accepted;
-    }
+      if (typeof parsed?.coffee_accepted === "boolean") {
+        coffeeAccepted = parsed.coffee_accepted;
+      }
 
-    // Se for doação recusada pelo Dante, desfaz o aumento de cafeína no perfil!
-    if (isDonation && !coffeeAccepted) {
-      const batchCaffeine = batch.reduce((sum, r) => sum + Number(r.caffeine_added ?? 0), 0);
-      const batchBottle = batch.reduce((sum, r) => sum + Number(r.bottle_stored ?? 0), 0);
-      await admin.from("profiles").update({
-        caffeine_level: Math.max(0, Number((currentCaffeine - batchCaffeine).toFixed(2))),
-        caffeine_bottle: Math.max(0, Number((Number(profile.caffeine_bottle ?? 0) - batchBottle).toFixed(2))),
-      }).eq("id", userId);
+      // Se for doação recusada pelo Dante, desfaz o aumento de cafeína no perfil!
+      if (!coffeeAccepted && receipt && batch.length > 0) {
+        const batchCaffeine = batch.reduce((sum, r) => sum + Number(r.caffeine_added ?? 0), 0);
+        const batchBottle = batch.reduce((sum, r) => sum + Number(r.bottle_stored ?? 0), 0);
+        revertedCaffeine = batchCaffeine;
+        await admin
+          .from("profiles")
+          .update({
+            caffeine_level: Math.max(0, Number((currentCaffeine - batchCaffeine).toFixed(2))),
+            caffeine_bottle: Math.max(0, Number((Number(profile.caffeine_bottle ?? 0) - batchBottle).toFixed(2))),
+          })
+          .eq("id", userId);
 
-      receipt.accepted = false;
-      receipt.caffeine_added = 0;
-      receipt.bottle_added = 0;
-      storedUserMessage = `${RECEIPT_PREFIX}${JSON.stringify(receipt)}`;
-    }
+        receipt.accepted = false;
+        receipt.caffeine_added = 0;
+        receipt.bottle_added = 0;
+        storedUserMessage = `${RECEIPT_PREFIX}${JSON.stringify(receipt)}`;
+      }
+
       sarcasmScore = null;
       energySpent = 0;
       flag = null;
@@ -520,7 +529,9 @@ Retorne APENAS o JSON puro, sem blocos de código markdown (\`\`\`json).${timeCo
     }
 
     // 3. ATUALIZAÇÃO DA CAFEÍNA (Sem bloquear quando zerar)
-    const newCaffeine = isDonation ? currentCaffeine : Math.max(0, Number((currentCaffeine - energySpent).toFixed(2)));
+    const newCaffeine = isDonation
+      ? Math.max(0, Number((currentCaffeine - revertedCaffeine).toFixed(2)))
+      : Math.max(0, Number((currentCaffeine - energySpent).toFixed(2)));
     const profileUpdates: Record<string, unknown> = {
       caffeine_level: newCaffeine,
     };
@@ -561,6 +572,7 @@ Retorne APENAS o JSON puro, sem blocos de código markdown (\`\`\`json).${timeCo
     return json({
       reply,
       donation: isDonation,
+      coffee_accepted: isDonation ? coffeeAccepted : undefined,
       credits: updatedCredits,
       sarcasm_score: sarcasmScore,
       caffeine_level: newCaffeine,

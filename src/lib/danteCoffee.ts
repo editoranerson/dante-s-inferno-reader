@@ -126,6 +126,7 @@ export interface CoffeeReceipt {
   total: number;
   caffeine_added: number;
   bottle_added: number;
+  accepted?: boolean;
 }
 
 export interface CoffeeBatchResult {
@@ -215,6 +216,7 @@ export function parseCoffeeReceipt(content: string): CoffeeReceipt | null {
       total: candidate.total,
       caffeine_added: candidate.caffeine_added,
       bottle_added: candidate.bottle_added,
+      accepted: candidate.accepted === false ? false : undefined,
     };
   } catch {
     return null;
