@@ -3,10 +3,11 @@ import { formatCaffeine, type CoffeeReceipt } from "@/lib/danteCoffee";
 
 export function CoffeeReceiptCard({ receipt }: { receipt: CoffeeReceipt }) {
   const isRejected = receipt.accepted === false;
+  const isPartial = !isRejected && receipt.items.some((item) => item.accepted === false);
 
   return (
     <article
-      className={`dante-coffee-receipt w-[92%] overflow-hidden rounded-2xl bg-ink-900/90 px-4 py-3.5 text-grape-50 shadow-xl border ${
+      className={`dante-coffee-receipt ${isRejected || isPartial ? "dante-coffee-receipt-rejected" : ""} w-[92%] overflow-hidden rounded-2xl bg-coffee-matte px-4 py-3.5 text-grape-50 shadow-xl border ${
         isRejected ? "border-rose-500/30" : "border-gold-400/15"
       }`}
       role="status"
@@ -31,7 +32,7 @@ export function CoffeeReceiptCard({ receipt }: { receipt: CoffeeReceipt }) {
               isRejected ? "text-rose-400/80 font-medium" : "text-grape-200/45"
             }`}
           >
-            {isRejected ? "Dante rejeitou a xícara" : "Doação confirmada"}
+            {isRejected ? "Dante rejeitou a xícara" : isPartial ? "Café parcialmente aceito" : "Doação confirmada"}
           </p>
         </div>
       </header>
@@ -47,6 +48,7 @@ export function CoffeeReceiptCard({ receipt }: { receipt: CoffeeReceipt }) {
                 {item.quantity}x
               </strong>{" "}
               {item.name}
+              {item.accepted === false && <span className="ml-1 text-coffee-rejected">· Recusado</span>}
             </span>
             <span className="whitespace-nowrap text-[11px] text-grape-200/50">
               {item.price.toLocaleString("pt-BR")} Dantes

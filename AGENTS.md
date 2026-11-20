@@ -31,3 +31,5 @@ use the editor.
 
 - Regression tests for the imported Dante Edge handler execute its transpiled source with mocked external services; this catches syntax and post-save failures without spending real user credits.
 - Repository mirrors use independent GitHub Actions matrix jobs with the shared SYNC_TOKEN secret, so a failed destination does not cancel the other mirror.
+- Coffee evaluations persist per-item acceptance in the receipt and return that receipt to the chat; mixed batches must not collapse into a single rejection.
+- The donation RPC repeats batch caffeine and bottle totals on each row; reversal reads the first row and recomputes accepted fuel to avoid multiplying deductions.

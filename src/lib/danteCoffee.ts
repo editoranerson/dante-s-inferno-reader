@@ -119,6 +119,7 @@ export interface CoffeeReceiptItem {
   icon: string;
   quantity: number;
   price: number;
+  accepted?: boolean;
 }
 
 export interface CoffeeReceipt {
@@ -195,6 +196,7 @@ export function parseCoffeeReceipt(content: string): CoffeeReceipt | null {
         icon: typeof item.icon === "string" ? item.icon : "coffee",
         quantity: Math.max(1, Math.round(item.quantity)),
         price: item.price,
+        accepted: typeof item.accepted === "boolean" ? item.accepted : undefined,
       });
     }
 
@@ -216,7 +218,7 @@ export function parseCoffeeReceipt(content: string): CoffeeReceipt | null {
       total: candidate.total,
       caffeine_added: candidate.caffeine_added,
       bottle_added: candidate.bottle_added,
-      accepted: candidate.accepted === false ? false : undefined,
+      accepted: typeof candidate.accepted === "boolean" ? candidate.accepted : undefined,
     };
   } catch {
     return null;

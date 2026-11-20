@@ -117,6 +117,7 @@ export function DanteChat() {
   const [messages, setMessages] = useState<UIMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [evaluatingCoffee, setEvaluatingCoffee] = useState(false);
   const [credits, setCredits] = useState<number>(0);
   const [breaks, setBreaks] = useState<DanteBreak[]>([]);
   const [activeBreak, setActiveBreak] = useState<DanteBreak | null>(null);
@@ -164,6 +165,7 @@ export function DanteChat() {
       },
     ]);
     setLoading(true);
+    setEvaluatingCoffee(true);
     setSarcasmScore(null);
     setEnergySpent(null);
 
@@ -191,6 +193,8 @@ export function DanteChat() {
       const data = (await res.json().catch(() => null)) as {
         reply?: string;
         error?: string;
+        coffee_accepted?: boolean;
+        coffee_receipt?: CoffeeReceipt;
       } | null;
 
       if (!res.ok || !data || data.error || typeof data.reply !== "string") {
@@ -203,12 +207,19 @@ export function DanteChat() {
         return;
       }
 
+      const confirmedReply = data.reply;
+      const confirmedReceipt = data.coffee_receipt ?? {
+        ...receipt,
+        accepted: data.coffee_accepted,
+        caffeine_added: data.coffee_accepted === false ? 0 : receipt.caffeine_added,
+        bottle_added: data.coffee_accepted === false ? 0 : receipt.bottle_added,
+      };
       setMessages((prev) => [
-        ...prev,
+        ...prev.map((message) => message.id === receiptId ? { ...message, receipt: confirmedReceipt } : message),
         {
           id: `coffee-ai-${Date.now()}`,
           role: "assistant",
-          content: data.reply as string,
+          content: confirmedReply,
         },
       ]);
     } catch (error) {
@@ -216,8 +227,10 @@ export function DanteChat() {
       toast("Café entregue e recibo salvo, mas a conexão caiu antes do agradecimento.", "error");
     } finally {
       setLoading(false);
+      setEvaluatingCoffee(false);
       setSarcasmScore(null);
       setEnergySpent(null);
+      await refreshProfile();
     }
   };
 
@@ -809,12 +822,12 @@ export function DanteChat() {
                   />
                   <div className="dante-bubble-border flex flex-col gap-1 rounded-2xl bg-ink-700/60 px-4 py-2.5">
                     <div className="flex items-center">
-                      <span className="text-sm text-grape-200/60">Dante está pensando</span>
-                      <span className="ml-1 flex gap-0.5">
+                      <span className="text-sm text-grape-200/60">{evaluatingCoffee ? "Avaliando café..." : "Dante está pensando"}</span>
+                      {!evaluatingCoffee && <span className="ml-1 flex gap-0.5">
                         <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-grape-300 [animation-delay:0ms]" />
                         <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-grape-300 [animation-delay:150ms]" />
                         <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-grape-300 [animation-delay:300ms]" />
-                      </span>
+                      </span>}
                     </div>
                     {sarcasmScore !== null && <Sarcasmometer score={sarcasmScore} />}
                   </div>

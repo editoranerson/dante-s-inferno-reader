@@ -9,16 +9,16 @@ const compiled = ts.transpileModule(source.replace(/^import .*createClient.*;\s*
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None },
 }).outputText;
 
-async function send(role: string, referralResult: "ok" | "error" | "throw" = "ok", options: { message?: string; donation?: boolean; acked?: boolean; credits?: number; lastMessageDate?: string; flag?: { reason: string; severity: string; block_minutes: number } } = {}) {
+async function send(role: string, referralResult: "ok" | "error" | "throw" = "ok", options: { message?: string; donation?: boolean; acked?: boolean; credits?: number; caffeine?: number; ratings?: number[]; decisions?: boolean[]; accepted?: boolean; lastMessageDate?: string; flag?: { reason: string; severity: string; block_minutes: number } } = {}) {
   const profile = {
     id: "test-user", full_name: "Anerson", role, credits: options.credits ?? 10, messages_today: 0,
     last_message_date: options.lastMessageDate ?? new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10),
-    caffeine_level: 75,
+    caffeine_level: options.caffeine ?? 75, caffeine_bottle: 80,
   };
   const donatedAt = new Date().toISOString();
   const donationRows = [
-    { quantity: 2, price_dantes: 110, caffeine_added: 25, bottle_stored: 40, created_at: donatedAt, dante_coffee_items: { name: "Cafeteira Inteira do Dante", icon: "coffee", description: "Uma cafeteira inteira", dante_rating: 9 } },
-    { quantity: 1, price_dantes: 5, caffeine_added: 25, bottle_stored: 40, created_at: donatedAt, dante_coffee_items: { name: "Espresso", icon: "cup" } },
+    { quantity: 2, price_dantes: 110, caffeine_added: 25, bottle_stored: 40, created_at: donatedAt, dante_coffee_items: { name: "Cafeteira Inteira do Dante", icon: "coffee", description: "Uma cafeteira inteira", dante_rating: options.ratings?.[0] ?? 9, caffeine_pct: 30 } },
+    { quantity: 1, price_dantes: 5, caffeine_added: 25, bottle_stored: 40, created_at: donatedAt, dante_coffee_items: { name: "Espresso", icon: "cup", dante_rating: options.ratings?.[1] ?? 5, caffeine_pct: 45 } },
   ];
   const inserts: unknown[] = [];
   const updates: Record<string, unknown>[] = [];
@@ -46,7 +46,7 @@ async function send(role: string, referralResult: "ok" | "error" | "throw" = "ok
       return builder;
     },
   };
-  const aiFetch = vi.fn(async () => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify({ reply: "Resposta de teste", energy_spent: 2, sarcasm_score: 30, flag: options.flag ?? null }) }] } }] }), { status: 200 }));
+  const aiFetch = vi.fn(async () => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify({ reply: "Resposta de teste", energy_spent: 2, sarcasm_score: 30, flag: options.flag ?? null, coffee_accepted: options.accepted ?? true, coffee_decisions: options.decisions?.map((accepted, item_index) => ({ item_index, accepted })) }) }] } }] }), { status: 200 }));
   let handler: ((request: Request) => Promise<Response>) | undefined;
   new Function("createClient", "Deno", "fetch", compiled)(() => client, {
     env: { get: () => "fake-test-value" },
@@ -160,5 +160,39 @@ describe("Dante chat regression", () => {
     const result = await send("user", "ok", { donation: true, message: "", acked: true });
     expect(result.response.status).toBe(409);
     expect(result.aiFetch).not.toHaveBeenCalled();
+  });
+
+  it.each([8, 9, 10])("always accepts rating %s at 100 percent caffeine", async (rating) => {
+    const result = await send("user", "ok", { donation: true, caffeine: 100, ratings: [rating, rating], decisions: [true, true] });
+    expect(result.body.coffee_receipt.items.map((item: { accepted: boolean }) => item.accepted)).toEqual([true, true]);
+    expect(result.body.caffeine_level).toBe(100);
+    expect(result.updates).toHaveLength(0);
+  });
+
+  it("does not display a model refusal of a 10/10 coffee at 95 percent", async () => {
+    const result = await send("user", "ok", { donation: true, caffeine: 95, ratings: [10, 10], decisions: [false, false], accepted: false });
+    expect(result.response.status).toBe(502);
+    expect(result.inserts).toHaveLength(0);
+    expect(result.updates).toHaveLength(0);
+  });
+
+  it("accepts noble coffee and rejects bad coffee separately in a mixed batch", async () => {
+    const result = await send("user", "ok", { donation: true, caffeine: 100, ratings: [10, -100], decisions: [true, false] });
+    expect(result.body.coffee_receipt.items.map((item: { accepted: boolean }) => item.accepted)).toEqual([true, false]);
+    expect(result.body.coffee_receipt.caffeine_added).toBe(25);
+    expect(result.body.coffee_receipt.bottle_added).toBe(17.5);
+    expect(result.updates).toEqual([{ caffeine_level: 100, caffeine_bottle: 57.5 }]);
+    expect(result.body.credits).toBe(10);
+    expect(result.body.energy_spent).toBe(0);
+    expect(result.body.sarcasm_score).toBeNull();
+  });
+
+  it("reverses duplicated batch totals only once when all bad coffees are refused", async () => {
+    const result = await send("user", "ok", { donation: true, caffeine: 100, ratings: [1, -100], decisions: [false, false], accepted: false });
+    expect(result.body.coffee_accepted).toBe(false);
+    expect(result.body.coffee_receipt.caffeine_added).toBe(0);
+    expect(result.body.coffee_receipt.bottle_added).toBe(0);
+    expect(result.updates).toEqual([{ caffeine_level: 75, caffeine_bottle: 40 }]);
+    expect(result.inserts[0]).toEqual(expect.arrayContaining([expect.objectContaining({ content: expect.stringContaining('"accepted":false') })]));
   });
 });

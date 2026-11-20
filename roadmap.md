@@ -1,6 +1,9 @@
 # Roadmap
 
 ## Plano aprovado: Café e Chat do Dante
+- [x] Blindar o aceite das notas 8 a 10 e avaliar separadamente os cafés de lotes mistos.
+- [x] Atualizar recibos imediatamente com recusa carmim e mostrar “Avaliando café...” durante a avaliação.
+- [x] Testar e publicar a função atualizada do Dante.
 - [x] Publicar a Edge Function `chat-dante` com validação real da doação e agradecimento sem consumo de créditos.
 - [x] Chamar a Edge Function após cada doação e exibir somente o agradecimento retornado pelo Dante.
 - [x] Renderizar o recibo de café estilizado imediatamente e ao recarregar o histórico.

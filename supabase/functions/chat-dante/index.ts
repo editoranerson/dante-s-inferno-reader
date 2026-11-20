@@ -43,11 +43,13 @@ type DonationRow = {
   caffeine_added: number;
   bottle_stored: number;
   created_at: string;
-  dante_coffee_items: { name: string; icon: string; description: string | null; dante_rating: number | null } | null;
+  dante_coffee_items: { name: string; icon: string; description: string | null; dante_rating: number | null; caffeine_pct: number } | null;
 };
 
 function buildDonationReceipt(donorName: string, rows: DonationRow[]) {
-  const items = rows.map((r) => ({
+  const items = rows.map((r, index) => ({
+    index,
+    accepted: true,
     name: r.dante_coffee_items?.name ?? "Café",
     icon: r.dante_coffee_items?.icon ?? "coffee",
     quantity: Math.max(1, Number(r.quantity ?? 1)),
@@ -56,13 +58,13 @@ function buildDonationReceipt(donorName: string, rows: DonationRow[]) {
   const total = items.reduce((sum, i) => sum + i.price, 0);
   const caffeineAdded = Number(rows[0]?.caffeine_added ?? 0);
   const bottleAdded = Number(rows[0]?.bottle_stored ?? 0);
-  const list = rows.map((r) => {
+  const list = rows.map((r, index) => {
     const it = r.dante_coffee_items;
     const qty = Math.max(1, Number(r.quantity ?? 1));
     const parts = [`avaliação interna: nota ${Number(it?.dante_rating ?? 5)} de 10`];
     const desc = (it?.description ?? "").trim();
     if (desc) parts.push(`detalhes: "${desc}"`);
-    return `${qty}x ${it?.name ?? "Café"} (${parts.join(" | ")})`;
+    return `${qty}x ${it?.name ?? "Café"} (${parts.join(" | ")}; item_index: ${index})`;
   }).join(", ");
   const text = `${donorName} te deu ${list}. Cafeína recebida: +${caffeineAdded}%.`;
   return { items, total, caffeine_added: caffeineAdded, bottle_added: bottleAdded, accepted: true, text };
@@ -154,7 +156,7 @@ Deno.serve(async (req: Request) => {
       const since = new Date(Date.now() - DONATION_WINDOW_MS).toISOString();
       const { data: donationRows } = await admin
         .from("dante_coffee_donations")
-        .select("quantity, price_dantes, caffeine_added, bottle_stored, created_at, dante_coffee_items(name, icon, description, dante_rating)")
+        .select("quantity, price_dantes, caffeine_added, bottle_stored, created_at, dante_coffee_items(name, icon, description, dante_rating, caffeine_pct)")
         .eq("user_id", userId)
         .gte("created_at", since)
         .order("created_at", { ascending: false })
@@ -324,12 +326,15 @@ ${caffeineModePrompt}
 
 8. EVENTO DE DOAÇÃO DE CAFÉ ([EVENTO_DOAÇÃO_CAFÉ]) E DECISÃO DE CONSUMIR:
    - Se a mensagem começar com "[EVENTO_DOAÇÃO_CAFÉ]", o usuário comprou um café para você.
-   - Você é livre! Com base na sua nota sobre o café E no seu nível atual de cafeína (${currentCaffeine.toFixed(0)}%), VOCÊ DECIDE se toma ou recusa o café!
+   - A recusa é exclusivamente por qualidade, NUNCA por saciedade, saúde, palpitação ou por já ter tomado muito café. Café bom sempre é bem-vindo; o excedente vai para a Garrafa Térmica.
+   - Cafés com nota de 8 a 10 SEMPRE são ACEITOS, mesmo com cafeína em 95%, 100% ou acima. Essa regra prevalece sobre qualquer humor ou nível de cafeína.
    - Cada café vem com a sua avaliação interna (nota de -100 a 10) e a descrição. A nota é só uma métrica interna para calibrar seu humor, deboche ou apreço: NUNCA cite o número da nota na resposta. Use a descrição como munição para a piada.
    - CRITÉRIO DE SOBREVIVÊNCIA VS. ARROGÂNCIA:
      * Cafeína crítica (0% a 20%): Você está desesperado. Recusar cafeína aqui é burrice: você ACEITA até café ruim/barato reclamando do sofrimento, porque precisa do combustível.
      * Cafeína média (21% a 60%): Você aceita os razoáveis e pode tolerar cafés medianos.
-     * Cafeína alta (70% a 100%): Você está no topo da arrogância. Seu paladar fica intolerante a desaforos. Cafés com nota baixa ou o cafezinho de 5ml (-100) devem ser RECUSADOS sem dó!
+     * Cafeína alta (70% a 100%): A recusa por paladar só pode atingir cafés com nota abaixo de 8. Cafés nobres continuam sempre aceitos.
+   - LOTES MISTOS: avalie CADA item separadamente, nunca a média do lote. Aceite os nobres e, se quiser, recuse os ruins no mesmo presente. Responda em 1 a 2 frases no total, deixando claro quais tomou e quais recusou, sem citar notas.
+   - NO JSON inclua "coffee_decisions": [{"item_index": 0, "accepted": true}, ...], com uma decisão por item_index recebido. Itens com nota 8 a 10 obrigatoriamente têm accepted: true.
    - NO JSON, defina: "coffee_accepted": true (se aceitou) ou false (se recusou).
    - Se ACEITOU: Agradeça em 1 a 2 frases curtas com ironia compatível com a nota (nunca cite o número da nota).
    - Se RECUSOU: Responda em 1 a 2 frases curtas com puro deboche explicando por que nem tocou na xícara.
@@ -341,7 +346,8 @@ FORMATO DE RESPOSTA OBRIGATÓRIO (JSON PURO):
   "sarcasm_score": <número de 0 a 100>,
   "energy_spent": <número inteiro de 1 a 7>,
   "flag": null | { "reason": "insult" | "threat_violence" | "jailbreak" | "tired", "severity": "low" | "medium" | "high", "block_minutes": <minutos de bloqueio, 0 se apenas advertência> },
-  "coffee_accepted": true | false
+  "coffee_accepted": true | false,
+  "coffee_decisions": [{"item_index": 0, "accepted": true | false}]
 }
 
 Retorne APENAS o JSON puro, sem blocos de código markdown (\`\`\`json).${timeContext ? `\n\n${timeContext}` : ""}${knowledgeBlock ? `\n\n--- Conhecimento do Dante ---\n${knowledgeBlock}` : ""}`;
@@ -412,6 +418,21 @@ Retorne APENAS o JSON puro, sem blocos de código markdown (\`\`\`json).${timeCo
           "";
 
         if (extracted) {
+          // Não exibir uma recusa textual de um café protegido, mesmo se o modelo ignorar o prompt.
+          if (isDonation) {
+            try {
+              const candidate = JSON.parse(extracted.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim());
+              const decisions = candidate.coffee_decisions;
+              const invalid = batch.some((row, index) => {
+                if (Number(row.dante_coffee_items?.dante_rating ?? 5) < 8) return false;
+                const decision = Array.isArray(decisions) ? decisions.find((d: { item_index?: number }) => d.item_index === index) : undefined;
+                return decision ? decision.accepted !== true : candidate.coffee_accepted === false;
+              });
+              if (invalid) continue;
+            } catch {
+              continue;
+            }
+          }
           rawReply = extracted;
           break;
         }
@@ -458,22 +479,34 @@ Retorne APENAS o JSON puro, sem blocos de código markdown (\`\`\`json).${timeCo
         coffeeAccepted = parsed.coffee_accepted;
       }
 
-      // Se for doação recusada pelo Dante, desfaz o aumento de cafeína no perfil!
-      if (!coffeeAccepted && receipt && batch.length > 0) {
-        const batchCaffeine = batch.reduce((sum, r) => sum + Number(r.caffeine_added ?? 0), 0);
-        const batchBottle = batch.reduce((sum, r) => sum + Number(r.bottle_stored ?? 0), 0);
-        revertedCaffeine = batchCaffeine;
-        await admin
-          .from("profiles")
-          .update({
-            caffeine_level: Math.max(0, Number((currentCaffeine - batchCaffeine).toFixed(2))),
-            caffeine_bottle: Math.max(0, Number((Number(profile.caffeine_bottle ?? 0) - batchBottle).toFixed(2))),
-          })
-          .eq("id", userId);
-
-        receipt.accepted = false;
-        receipt.caffeine_added = 0;
-        receipt.bottle_added = 0;
+      if (receipt && batch.length > 0) {
+        receipt.items = receipt.items.map((item, index) => {
+          const decision = Array.isArray(parsed?.coffee_decisions)
+            ? parsed.coffee_decisions.find((d: { item_index?: number }) => d.item_index === index)
+            : undefined;
+          const protectedCoffee = Number(batch[index].dante_coffee_items?.dante_rating ?? 5) >= 8;
+          return { ...item, accepted: protectedCoffee || (typeof decision?.accepted === "boolean" ? decision.accepted : coffeeAccepted) };
+        });
+        coffeeAccepted = receipt.items.some((item) => item.accepted);
+        // A RPC repete os totais do lote em cada linha: usar somente a primeira, nunca somar.
+        const originalCaffeine = Number(batch[0].caffeine_added ?? 0);
+        const originalBottle = Number(batch[0].bottle_stored ?? 0);
+        const beforeCaffeine = Math.max(0, currentCaffeine - originalCaffeine);
+        const acceptedFuel = batch.reduce((sum, row, index) => receipt?.items[index].accepted
+          ? sum + Number(row.dante_coffee_items?.caffeine_pct ?? 0) * Math.max(1, Number(row.quantity ?? 1))
+          : sum, 0);
+        const hasRejected = receipt.items.some((item) => !item.accepted);
+        if (hasRejected) {
+          receipt.caffeine_added = Math.min(100 - beforeCaffeine, acceptedFuel);
+          receipt.bottle_added = Number((Math.max(0, acceptedFuel - receipt.caffeine_added) * 0.5).toFixed(2));
+          revertedCaffeine = originalCaffeine - receipt.caffeine_added;
+          const { error: reversalError } = await admin.from("profiles").update({
+            caffeine_level: Number((beforeCaffeine + receipt.caffeine_added).toFixed(2)),
+            caffeine_bottle: Math.max(0, Number((Number(profile.caffeine_bottle ?? 0) - originalBottle + receipt.bottle_added).toFixed(2))),
+          }).eq("id", userId);
+          if (reversalError) return json({ error: "Não foi possível registrar a avaliação do café." }, 500);
+        }
+        receipt.accepted = coffeeAccepted;
         storedUserMessage = `${RECEIPT_PREFIX}${JSON.stringify(receipt)}`;
       }
 
@@ -573,6 +606,7 @@ Retorne APENAS o JSON puro, sem blocos de código markdown (\`\`\`json).${timeCo
       reply,
       donation: isDonation,
       coffee_accepted: isDonation ? coffeeAccepted : undefined,
+      coffee_receipt: isDonation ? receipt : undefined,
       credits: updatedCredits,
       sarcasm_score: sarcasmScore,
       caffeine_level: newCaffeine,
