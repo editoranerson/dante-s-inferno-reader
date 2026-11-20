@@ -64,8 +64,8 @@ export function DanteCoffeeAdmin() {
 
   const save = async () => {
     if (!form.name.trim()) return toast('Dê um nome ao café.', 'error');
-    if (form.dante_rating < 0 || form.dante_rating > 10) {
-      toast('A nota do Dante vai de 0 a 10.', 'error');
+    if (form.dante_rating < -100 || form.dante_rating > 10) {
+      toast('A nota do Dante vai de -100 a 10.', 'error');
       return;
     }
     if (form.price_dantes <= 0 || form.caffeine_pct <= 0) {
@@ -165,8 +165,8 @@ export function DanteCoffeeAdmin() {
               <input type="number" min="0.01" step="0.01" className="input" value={form.caffeine_pct} onChange={(e) => setForm({ ...form, caffeine_pct: Number(e.target.value) })} />
             </div>
             <div>
-              <label className="label">Nota do Dante (0 a 10)</label>
-              <input type="number" min="0" max="10" step="0.5" className="input" value={form.dante_rating} onChange={(e) => setForm({ ...form, dante_rating: Number(e.target.value) })} />
+              <label className="label">Nota do Dante (-100 a 10)</label>
+              <input type="number" min="-100" max="10" step="0.5" className="input" value={form.dante_rating} onChange={(e) => setForm({ ...form, dante_rating: Number(e.target.value) })} />
             </div>
             <div>
               <label className="label">Ícone</label>
