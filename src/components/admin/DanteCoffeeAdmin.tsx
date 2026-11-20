@@ -65,7 +65,7 @@ export function DanteCoffeeAdmin() {
   const save = async () => {
     if (!form.name.trim()) return toast('Dê um nome ao café.', 'error');
     if (form.dante_rating < 0 || form.dante_rating > 10) {
-      toast({ title: 'A nota do Dante vai de 0 a 10', variant: 'destructive' });
+      toast('A nota do Dante vai de 0 a 10.', 'error');
       return;
     }
     if (form.price_dantes <= 0 || form.caffeine_pct <= 0) {
