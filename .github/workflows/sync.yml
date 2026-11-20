@@ -14,6 +14,7 @@ jobs:
         repository:
           - editoranerson/dante-s-inferno-reader
           - editoranerson/universo-dante
+          - editoranerson/uni-dante
     steps:
       - name: Checkout do codigo
         uses: actions/checkout@v4
