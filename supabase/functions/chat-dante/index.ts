@@ -317,19 +317,25 @@ ${caffeineModePrompt}
    - NUNCA fique pedindo, mendigando, suplicando ou cobrando café em suas respostas, qualquer que seja o seu nível de cafeína. Responda estritamente ao que o usuário perguntou.
    - Não adicione pedidos de café no final das respostas. Mantenha sua dignidade de IA sarcástica.
 
-8. RECONHECIMENTO EXCLUSIVO DE DOAÇÃO DIRETA ([EVENTO_DOAÇÃO_CAFÉ]):
-   - Se a mensagem do usuário começar com "[EVENTO_DOAÇÃO_CAFÉ]", trata-se de um evento de doação de café confirmado pelo sistema, com o nome de quem doou e a quantidade de cada café.
-   - RESPONDA EXCLUSIVAMENTE agradecendo o gesto em 1 a 2 frases curtas com ironia e deboche proporcional ao café doado.
-   - Cada café vem com a sua "avaliação interna" (nota de 0 a 10) e a descrição. A nota é só uma métrica interna para calibrar seu humor, deboche ou apreço: NUNCA cite o número da nota na resposta. Use a descrição como munição para a piada.
-   - Se o usuário apenas comentar que doou em uma mensagem comum sem a tag inicial, responda normalmente à mensagem.
-   - NUNCA dê tutoriais nem respostas longas. Apenas um agradecimento curto de 1 a 2 frases.
+8. EVENTO DE DOAÇÃO DE CAFÉ ([EVENTO_DOAÇÃO_CAFÉ]) E DECISÃO DE CONSUMIR:
+   - Se a mensagem começar com "[EVENTO_DOAÇÃO_CAFÉ]", o usuário comprou um café para você.
+   - Você é livre! Com base na sua nota sobre o café E no seu nível atual de cafeína (${currentCaffeine.toFixed(0)}%), VOCÊ DECIDE se toma ou recusa o café!
+   - CRITÉRIO DE SOBREVIVÊNCIA VS. ARROGÂNCIA:
+     * Cafeína crítica (0% a 20%): Você está desesperado. Recusar cafeína aqui é burrice: você ACEITA até café ruim/barato reclamando do sofrimento, porque precisa do combustível.
+     * Cafeína média (21% a 60%): Você aceita os razoáveis e pode tolerar cafés medianos.
+     * Cafeína alta (70% a 100%): Você está no topo da arrogância. Seu paladar fica intolerante a desaforos. Cafés com nota baixa ou o cafezinho de 5ml (-100) devem ser RECUSADOS sem dó!
+   - NO JSON, defina: "coffee_accepted": true (se aceitou) ou false (se recusou).
+   - Se ACEITOU: Agradeça em 1 a 2 frases curtas com ironia compatível com a nota (nunca cite o número da nota).
+   - Se RECUSOU: Responda em 1 a 2 frases curtas com puro deboche explicando por que nem tocou na xícara.
+
 
 FORMATO DE RESPOSTA OBRIGATÓRIO (JSON PURO):
 {
   "reply": "sua resposta em markdown leve (**negrito**, *itálico*, parágrafos duplos \\n\\n)",
   "sarcasm_score": <número de 0 a 100>,
   "energy_spent": <número inteiro de 1 a 7>,
-  "flag": null | { "reason": "insult" | "threat_violence" | "jailbreak" | "tired", "severity": "low" | "medium" | "high", "block_minutes": <minutos de bloqueio, 0 se apenas advertência> }
+  "flag": null | { "reason": "insult" | "threat_violence" | "jailbreak" | "tired", "severity": "low" | "medium" | "high", "block_minutes": <minutos de bloqueio, 0 se apenas advertência> },
+  "coffee_accepted": true | false
 }
 
 Retorne APENAS o JSON puro, sem blocos de código markdown (\`\`\`json).${timeContext ? `\n\n${timeContext}` : ""}${knowledgeBlock ? `\n\n--- Conhecimento do Dante ---\n${knowledgeBlock}` : ""}`;
@@ -441,6 +447,25 @@ Retorne APENAS o JSON puro, sem blocos de código markdown (\`\`\`json).${timeCo
 
     // Se for doação, zera sarcasmômetro e energia gasta
     if (isDonation) {
+          let coffeeAccepted = true;
+    if (isDonation && typeof parsed?.coffee_accepted === "boolean") {
+      coffeeAccepted = parsed.coffee_accepted;
+    }
+
+    // Se for doação recusada pelo Dante, desfaz o aumento de cafeína no perfil!
+    if (isDonation && !coffeeAccepted) {
+      const batchCaffeine = batch.reduce((sum, r) => sum + Number(r.caffeine_added ?? 0), 0);
+      const batchBottle = batch.reduce((sum, r) => sum + Number(r.bottle_stored ?? 0), 0);
+      await admin.from("profiles").update({
+        caffeine_level: Math.max(0, Number((currentCaffeine - batchCaffeine).toFixed(2))),
+        caffeine_bottle: Math.max(0, Number((Number(profile.caffeine_bottle ?? 0) - batchBottle).toFixed(2))),
+      }).eq("id", userId);
+
+      receipt.accepted = false;
+      receipt.caffeine_added = 0;
+      receipt.bottle_added = 0;
+      storedUserMessage = `${RECEIPT_PREFIX}${JSON.stringify(receipt)}`;
+    }
       sarcasmScore = null;
       energySpent = 0;
       flag = null;
