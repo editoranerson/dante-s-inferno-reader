@@ -1555,6 +1555,7 @@ export type Database = {
           dante_block_reason: string | null
           dante_blocked_until: string | null
           dante_immunity: boolean | null
+          email: string | null
           full_name: string
           id: string
           last_message_date: string | null
@@ -1578,6 +1579,7 @@ export type Database = {
           dante_block_reason?: string | null
           dante_blocked_until?: string | null
           dante_immunity?: boolean | null
+          email?: string | null
           full_name?: string
           id: string
           last_message_date?: string | null
@@ -1601,6 +1603,7 @@ export type Database = {
           dante_block_reason?: string | null
           dante_blocked_until?: string | null
           dante_immunity?: boolean | null
+          email?: string | null
           full_name?: string
           id?: string
           last_message_date?: string | null
