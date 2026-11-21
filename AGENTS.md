@@ -33,3 +33,5 @@ use the editor.
 - Repository mirrors use independent GitHub Actions matrix jobs with the shared SYNC_TOKEN secret, so a failed destination does not cancel the other mirror.
 - Coffee evaluations persist per-item acceptance in the receipt and return that receipt to the chat; mixed batches must not collapse into a single rejection.
 - The donation RPC repeats batch caffeine and bottle totals on each row; reversal reads the first row and recomputes accepted fuel to avoid multiplying deductions.
+- Donation generation uses an isolated prompt and no conversation history, temporal context, knowledge additions or caffeine mode; state remains available only for accounting.
+- Affection analysis is dispatched by the existing imported Dante handler before chat accounting, verifies the caller through the authenticated admin RPC, and saves only the four diagnostic fields after validating model output.

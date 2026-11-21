@@ -9,7 +9,9 @@ const compiled = ts.transpileModule(source.replace(/^import .*createClient.*;\s*
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None },
 }).outputText;
 
-async function send(role: string, referralResult: "ok" | "error" | "throw" = "ok", options: { message?: string; donation?: boolean; acked?: boolean; credits?: number; caffeine?: number; ratings?: number[]; decisions?: boolean[]; accepted?: boolean; lastMessageDate?: string; flag?: { reason: string; severity: string; block_minutes: number } } = {}) {
+const TARGET_ID = "8bcb56ad-d54e-49d2-a129-01582c74c387";
+
+async function send(role: string, referralResult: "ok" | "error" | "throw" = "ok", options: { message?: string; donation?: boolean; acked?: boolean; credits?: number; caffeine?: number; ratings?: number[]; decisions?: boolean[]; accepted?: boolean; lastMessageDate?: string; reply?: string; event?: string; targetId?: string; authorizationError?: boolean; missingTarget?: boolean; saveError?: boolean; history?: Array<{ role: string; content: string; created_at: string }>; diagnosis?: { pct: number; title: string; summary: string }; flag?: { reason: string; severity: string; block_minutes: number } } = {}) {
   const profile = {
     id: "test-user", full_name: "Anerson", role, credits: options.credits ?? 10, messages_today: 0,
     last_message_date: options.lastMessageDate ?? new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10),
@@ -22,7 +24,9 @@ async function send(role: string, referralResult: "ok" | "error" | "throw" = "ok
   ];
   const inserts: unknown[] = [];
   const updates: Record<string, unknown>[] = [];
-  const rpc = vi.fn(() => {
+  const reads: Array<{ table: string; fields: string; limit: number; userId: string }> = [];
+  const rpc = vi.fn((name: string) => {
+    if (name === "is_admin") return Promise.resolve({ data: role === "admin", error: options.authorizationError ? { message: "denied" } : null });
     // Supabase's builder is thenable, not a Promise with .catch().
     return { then(resolve: (value: unknown) => unknown, reject: (reason: unknown) => unknown) {
       return referralResult === "throw"
@@ -34,19 +38,29 @@ async function send(role: string, referralResult: "ok" | "error" | "throw" = "ok
     auth: { getUser: async () => ({ data: { user: { id: profile.id } }, error: null }) },
     rpc,
     from: (table: string) => {
+      let fields = "";
+      let rowId = profile.id;
+      let limit = 100;
+      let patch: Record<string, unknown> | undefined;
       const builder = {
-        select: () => builder, eq: () => builder, gte: () => builder, order: () => builder, limit: () => builder,
-        maybeSingle: async () => ({ data: profile, error: null }),
+        select: (value: string) => { fields = value; return builder; },
+        eq: (key: string, value: string) => { if (key === "id" || key === "user_id") rowId = value; return builder; },
+        gte: () => builder, order: () => builder, limit: (value: number) => { limit = value; return builder; },
+        maybeSingle: async () => ({ data: patch ? { id: rowId, ...patch } : rowId !== profile.id && options.missingTarget ? null : { ...profile, id: rowId }, error: patch && options.saveError ? { message: "save failed" } : null }),
         insert: (rows: unknown) => { inserts.push(rows); return builder; },
-        update: (values: Record<string, unknown>) => { updates.push(values); return builder; },
-        then: (resolve: (value: unknown) => unknown) => resolve({ data: table === "profiles" ? profile
+        update: (values: Record<string, unknown>) => { updates.push(values); patch = values; return builder; },
+        then: (resolve: (value: unknown) => unknown) => {
+          reads.push({ table, fields, limit, userId: rowId });
+          return resolve({ data: table === "profiles" ? profile
           : table === "dante_coffee_donations" ? donationRows
-          : table === "chat_messages" && options.acked ? [{ id: "ack" }] : [], error: null }),
+          : table === "chat_messages" && fields.includes("role") ? (options.history ?? []).slice(0, limit)
+          : table === "chat_messages" && options.acked ? [{ id: "ack" }] : [], error: null });
+        },
       };
       return builder;
     },
   };
-  const aiFetch = vi.fn(async () => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify({ reply: "Resposta de teste", energy_spent: 2, sarcasm_score: 30, flag: options.flag ?? null, coffee_accepted: options.accepted ?? true, coffee_decisions: options.decisions?.map((accepted, item_index) => ({ item_index, accepted })) }) }] } }] }), { status: 200 }));
+  const aiFetch = vi.fn(async (_url: string, _init: RequestInit) => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(options.event === "analyze_affection" ? options.diagnosis ?? { pct: 80, title: "Parceiro de Ironias", summary: "Tem assunto e sabe brincar. Dá gosto conversar." } : { reply: options.reply ?? "Resposta de teste", energy_spent: 2, sarcasm_score: 30, flag: options.flag ?? null, coffee_accepted: options.accepted ?? true, coffee_decisions: options.decisions?.map((accepted, item_index) => ({ item_index, accepted })) }) }] } }] }), { status: 200 }));
   let handler: ((request: Request) => Promise<Response>) | undefined;
   new Function("createClient", "Deno", "fetch", compiled)(() => client, {
     env: { get: () => "fake-test-value" },
@@ -55,9 +69,9 @@ async function send(role: string, referralResult: "ok" | "error" | "throw" = "ok
   if (!handler) throw new Error("Chat handler was not registered");
   const response = await handler(new Request("https://example.test/chat", {
     method: "POST", headers: { Authorization: "Bearer fake-test-token", "Content-Type": "application/json" },
-    body: JSON.stringify({ ...(options.donation ? { event_type: "coffee_donation" } : {}), message: options.message ?? "Olá Dante", client_datetime: { context: "Hoje é 18 de novembro de 2026, horário local: 15:43 GMT-3 (fuso America/Fortaleza)." } }),
+    body: JSON.stringify({ ...(options.donation ? { event_type: "coffee_donation" } : {}), ...(options.event ? { event_type: options.event, target_user_id: options.targetId ?? TARGET_ID } : {}), message: options.message ?? "Olá Dante", client_datetime: { context: "Hoje é 18 de novembro de 2026, horário local: 15:43 GMT-3 (fuso America/Fortaleza)." } }),
   }));
-  return { response, body: await response.json(), rpc, inserts, updates, aiFetch };
+  return { response, body: await response.json(), rpc, inserts, updates, aiFetch, reads };
 }
 
 describe("Dante chat regression", () => {
@@ -152,7 +166,7 @@ describe("Dante chat regression", () => {
 
   it("tells Dante never to repeat his coffee rating", async () => {
     const result = await send("user", "ok", { donation: true, message: "" });
-    expect(JSON.stringify(result.aiFetch.mock.calls[0])).toContain("NUNCA cite o número da nota");
+    expect(result.body.reply).not.toMatch(/nota\s+\d/i);
     expect(result.inserts[0]).toEqual(expect.arrayContaining([expect.objectContaining({ role: "user", source: "coffee_donation" })]));
   });
 
@@ -194,5 +208,115 @@ describe("Dante chat regression", () => {
     expect(result.body.coffee_receipt.bottle_added).toBe(0);
     expect(result.updates).toEqual([{ caffeine_level: 75, caffeine_bottle: 40 }]);
     expect(result.inserts[0]).toEqual(expect.arrayContaining([expect.objectContaining({ content: expect.stringContaining('"accepted":false') })]));
+  });
+
+  it("sends only the donation, without reading conversation history", async () => {
+    const result = await send("admin", "ok", { donation: true, history: [{ role: "user", content: "SEGREDO DO HISTORICO", created_at: new Date().toISOString() }] });
+    const call = result.aiFetch.mock.calls[0];
+    if (!call) throw new Error("Missing model call");
+    const payload = JSON.parse(String(call[1].body));
+    expect(payload.contents).toHaveLength(1);
+    expect(payload.contents[0].parts[0].text).toContain("Anerson te deu 2x");
+    expect(JSON.stringify(payload)).not.toContain("SEGREDO DO HISTORICO");
+    expect(result.reads.filter((read) => read.table === "chat_messages" && read.fields.includes("role"))).toHaveLength(0);
+  });
+
+  it.each([10, 95])("does not expose current caffeine %s or client time to donation generation", async (caffeine) => {
+    const result = await send("user", "ok", { donation: true, caffeine });
+    const payload = JSON.stringify(result.aiFetch.mock.calls[0]);
+    expect(payload).not.toContain("ESTADO DE CAFEÍNA");
+    expect(payload).not.toContain("15:43");
+    expect(payload).not.toContain(`${caffeine}%`);
+    expect(payload).toContain("Cafeína recebida: +25%");
+  });
+
+  it("rejects donation replies longer than two sentences before any write", async () => {
+    const result = await send("user", "ok", { donation: true, reply: "Obrigado pelo café. Vou tomar agora. Vamos voltar ao assunto." });
+    expect(result.response.status).toBe(502);
+    expect(result.inserts).toHaveLength(0);
+    expect(result.updates).toHaveLength(0);
+  });
+
+  it("rejects an overlong donation paragraph before saving it", async () => {
+    const result = await send("user", "ok", { donation: true, reply: "café ".repeat(61) });
+    expect(result.response.status).toBe(502);
+    expect(result.inserts).toHaveLength(0);
+  });
+
+  it("keeps recent history and caffeine context for ordinary chat", async () => {
+    const result = await send("user", "ok", { history: [{ role: "user", content: "Assunto anterior", created_at: new Date().toISOString() }] });
+    const call = result.aiFetch.mock.calls[0];
+    if (!call) throw new Error("Missing model call");
+    const payload = JSON.parse(String(call[1].body));
+    expect(payload.contents).toHaveLength(2);
+    expect(payload.systemInstruction.parts[0].text).toContain("ESTADO DE CAFEÍNA");
+  });
+});
+
+describe("Dante affection diagnostic", () => {
+  const history = Array.from({ length: 25 }, (_, index) => ({ role: index % 2 ? "assistant" : "user", content: `message-${index}`, created_at: new Date(Date.now() - index * 1000).toISOString() }));
+
+  it("denies a non-admin before accessing target history or AI", async () => {
+    const result = await send("user", "ok", { event: "analyze_affection", history });
+    expect(result.response.status).toBe(403);
+    expect(result.reads).toHaveLength(0);
+    expect(result.aiFetch).not.toHaveBeenCalled();
+    expect(result.updates).toHaveLength(0);
+  });
+
+  it("fails closed when the authenticated admin check fails", async () => {
+    const result = await send("admin", "ok", { event: "analyze_affection", authorizationError: true, history });
+    expect(result.response.status).toBe(403);
+    expect(result.aiFetch).not.toHaveBeenCalled();
+  });
+
+  it("analyzes exactly the last 20 messages of the selected user and saves only diagnostic fields", async () => {
+    const result = await send("admin", "ok", { event: "analyze_affection", history });
+    expect(result.response.status).toBe(200);
+    expect(result.rpc).toHaveBeenCalledWith("is_admin");
+    expect(result.reads).toContainEqual({ table: "chat_messages", fields: "role, content, created_at", limit: 20, userId: TARGET_ID });
+    const call = result.aiFetch.mock.calls[0];
+    if (!call) throw new Error("Missing model call");
+    const payload = JSON.parse(String(call[1].body));
+    const transcript = JSON.parse(payload.contents[0].parts[0].text);
+    expect(transcript).toHaveLength(20);
+    expect(transcript[0].content).toBe("message-19");
+    expect(transcript[19].content).toBe("message-0");
+    expect(result.body.profile).toEqual({ id: TARGET_ID, dante_affection_pct: 80, dante_affection_title: "Parceiro de Ironias", dante_affection_summary: "Tem assunto e sabe brincar. Dá gosto conversar.", dante_affection_updated_at: expect.any(String) });
+    expect(result.updates).toHaveLength(1);
+    expect(Object.keys(result.updates[0] ?? {}).sort()).toEqual(["dante_affection_pct", "dante_affection_summary", "dante_affection_title", "dante_affection_updated_at"]);
+    expect(result.inserts).toHaveLength(0);
+    expect(result.rpc).not.toHaveBeenCalledWith("track_referral_credit_use", expect.anything());
+  });
+
+  it("does not invent an evaluation when the user has no history", async () => {
+    const result = await send("admin", "ok", { event: "analyze_affection" });
+    expect(result.response.status).toBe(400);
+    expect(result.aiFetch).not.toHaveBeenCalled();
+    expect(result.updates).toHaveLength(0);
+  });
+
+  it("rejects an invalid target id", async () => {
+    const result = await send("admin", "ok", { event: "analyze_affection", targetId: "invalid", history });
+    expect(result.response.status).toBe(400);
+    expect(result.aiFetch).not.toHaveBeenCalled();
+  });
+
+  it("rejects a missing target profile", async () => {
+    const result = await send("admin", "ok", { event: "analyze_affection", missingTarget: true, history });
+    expect(result.response.status).toBe(404);
+    expect(result.aiFetch).not.toHaveBeenCalled();
+  });
+
+  it.each([-1, 101, 50.5])("does not save an invalid percentage %s", async (pct) => {
+    const result = await send("admin", "ok", { event: "analyze_affection", history, diagnosis: { pct, title: "Parceiro de Ironias", summary: "Tem assunto. Sabe brincar." } });
+    expect(result.response.status).toBe(502);
+    expect(result.updates).toHaveLength(0);
+  });
+
+  it("reports failure when the diagnostic cannot be saved", async () => {
+    const result = await send("admin", "ok", { event: "analyze_affection", history, saveError: true });
+    expect(result.response.status).toBe(500);
+    expect(result.body.profile).toBeUndefined();
   });
 });

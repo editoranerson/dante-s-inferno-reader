@@ -40,6 +40,7 @@ import {
 } from 'lucide-react';
 import {
   supabase,
+  SUPABASE_URL,
   CARD_TYPE_LABELS,
   type CardType,
   type Character,
@@ -79,6 +80,7 @@ import { DanteCoffeeAdmin } from '@/components/admin/DanteCoffeeAdmin';
 import { DanteReportsAdmin } from '@/components/admin/DanteReportsAdmin';
 import { CoffeeReceiptCard } from '@/components/CoffeeReceiptCard';
 import { parseCoffeeReceipt } from '@/lib/danteCoffee';
+import { Button } from '@/components/ui/button';
 
 type AdminTab =
   | 'personagens'
@@ -1076,6 +1078,7 @@ function UsersAdmin() {
   const [cardId, setCardId] = useState('');
   const [granting, setGranting] = useState(false);
   const [moderating, setModerating] = useState(false);
+  const [analyzingAffection, setAnalyzingAffection] = useState(false);
   const [planGrant, setPlanGrant] = useState<PlanType>('free');
   const [planExpiry, setPlanExpiry] = useState('');
 
@@ -1170,6 +1173,36 @@ function UsersAdmin() {
     }, `Chat suspenso por ${durationHours} horas.`);
   };
 
+  const analyzeAffection = async () => {
+    if (!selected || analyzingAffection) return;
+    const targetId = selected.id;
+    setAnalyzingAffection(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Faça login novamente.');
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/chat-dante`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event_type: 'analyze_affection', target_user_id: targetId }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.profile || data.profile.id !== targetId) throw new Error(data.error || 'Não foi possível gerar o diagnóstico.');
+      const patch: Partial<Profile> = {
+        dante_affection_pct: data.profile.dante_affection_pct,
+        dante_affection_title: data.profile.dante_affection_title,
+        dante_affection_summary: data.profile.dante_affection_summary,
+        dante_affection_updated_at: data.profile.dante_affection_updated_at,
+      };
+      setSelected((current) => current?.id === targetId ? { ...current, ...patch } : current);
+      setUsers((current) => current.map((user) => user.id === targetId ? { ...user, ...patch } : user));
+      toast('Diagnóstico de afeto atualizado.', 'success');
+    } catch (error) {
+      toast(error instanceof Error ? error.message : 'Não foi possível gerar o diagnóstico.', 'error');
+    } finally {
+      setAnalyzingAffection(false);
+    }
+  };
+
   return (
     <div>
       <h2 className="mb-4 font-display text-xl font-semibold text-grape-50">Controle de Usuários</h2>
@@ -1257,6 +1290,10 @@ function UsersAdmin() {
                 <p className="text-sm font-semibold text-grape-50">{selected.dante_affection_title || 'Sobrevivente Resiliente'}</p>
                 <p className="mt-1 text-xs leading-relaxed text-grape-200/60">{selected.dante_affection_summary || 'O diagnóstico de afeto ainda não foi atualizado.'}</p>
                 {selected.dante_affection_updated_at && <p className="mt-1 text-[10px] text-grape-200/40">Analisado em {new Date(selected.dante_affection_updated_at).toLocaleString('pt-BR')}</p>}
+                <Button size="sm" variant="outline" className="mt-3 h-auto min-h-8 w-full whitespace-normal" disabled={analyzingAffection} onClick={analyzeAffection}>
+                  <Brain size={14} />
+                  {analyzingAffection ? 'Dante está avaliando o histórico...' : selected.dante_affection_updated_at ? 'Reanalisar afeto' : 'Gerar diagnóstico com IA'}
+                </Button>
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
                 {[2, 12, 24].map((duration) => (
