@@ -2365,7 +2365,6 @@ export type Database = {
       }
       redeem_card_code: { Args: { p_code: string }; Returns: Json }
       redeem_shop_item: { Args: { p_item_id: string }; Returns: Json }
-      refill_dante_from_bottle: { Args: { p_amount?: number }; Returns: Json }
       reject_task: {
         Args: { p_feedback?: string; p_submission_id: string }
         Returns: Json
