@@ -837,6 +837,7 @@ export type Database = {
           imported_at: string | null
           role: string
           sarcasm_score: number | null
+          session_id: string | null
           source: string
           user_id: string
         }
@@ -847,6 +848,7 @@ export type Database = {
           imported_at?: string | null
           role: string
           sarcasm_score?: number | null
+          session_id?: string | null
           source?: string
           user_id?: string
         }
@@ -857,7 +859,43 @@ export type Database = {
           imported_at?: string | null
           role?: string
           sarcasm_score?: number | null
+          session_id?: string | null
           source?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_messages_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "chat_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_sessions: {
+        Row: {
+          created_at: string
+          id: string
+          is_archived: boolean
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_archived?: boolean
+          title?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_archived?: boolean
+          title?: string
+          updated_at?: string
           user_id?: string
         }
         Relationships: []
@@ -1257,6 +1295,7 @@ export type Database = {
           dante_response: string | null
           id: string
           reason_type: string
+          session_id: string | null
           severity: string
           status: string
           user_id: string
@@ -1268,6 +1307,7 @@ export type Database = {
           dante_response?: string | null
           id?: string
           reason_type: string
+          session_id?: string | null
           severity?: string
           status?: string
           user_id: string
@@ -1279,12 +1319,20 @@ export type Database = {
           dante_response?: string | null
           id?: string
           reason_type?: string
+          session_id?: string | null
           severity?: string
           status?: string
           user_id?: string
           user_message?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "dante_reports_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "chat_sessions"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "dante_reports_user_id_fkey"
             columns: ["user_id"]
@@ -2295,6 +2343,7 @@ export type Database = {
       affiliate_scratch_event_active: { Args: never; Returns: boolean }
       affiliate_scratch_status: { Args: never; Returns: Json }
       approve_task: { Args: { p_submission_id: string }; Returns: Json }
+      archive_chat_session: { Args: { p_session_id: string }; Returns: Json }
       award_game_win: {
         Args: { p_game_id: string; p_game_type: string; p_reward: number }
         Returns: Json
@@ -2316,7 +2365,12 @@ export type Database = {
       buy_wallpaper: { Args: { p_id: string }; Returns: Json }
       check_affiliate_account: { Args: never; Returns: Json }
       confirm_visit_retention: { Args: { p_visit_id: string }; Returns: Json }
+      create_chat_session: { Args: { p_title?: string }; Returns: Json }
       dante_wallet_apply_yield: { Args: never; Returns: Json }
+      delete_chat_session: {
+        Args: { p_session_id: string }
+        Returns: undefined
+      }
       donate_dante_coffee: { Args: { p_item_id: string }; Returns: Json }
       donate_dante_coffee_batch: { Args: { p_items: Json }; Returns: Json }
       ensure_affiliate_account: {
@@ -2341,6 +2395,7 @@ export type Database = {
       }
       ensure_daily_credits: { Args: never; Returns: number }
       generate_referral_code: { Args: never; Returns: string }
+      get_user_session_limit: { Args: { p_user_id: string }; Returns: number }
       get_vault_secret: { Args: { secret_name: string }; Returns: string }
       import_lovable_conversation: {
         Args: { p_messages: Json; p_user_id: string }
@@ -2369,6 +2424,10 @@ export type Database = {
         Args: { p_feedback?: string; p_submission_id: string }
         Returns: Json
       }
+      rename_chat_session: {
+        Args: { p_session_id: string; p_title: string }
+        Returns: undefined
+      }
       reset_daily_credits: { Args: never; Returns: undefined }
       reset_daily_messages: { Args: { p_uid: string }; Returns: number }
       seed_admin: { Args: never; Returns: Json }
@@ -2380,6 +2439,7 @@ export type Database = {
         Args: { p_credits?: number; p_referred_id: string }
         Returns: Json
       }
+      unarchive_chat_session: { Args: { p_session_id: string }; Returns: Json }
       wallet_deposit: { Args: { p_amount: number }; Returns: Json }
       wallet_my: { Args: never; Returns: Json }
       wallet_run_closing: { Args: never; Returns: Json }
