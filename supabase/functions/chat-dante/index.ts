@@ -319,7 +319,7 @@ FORMATO DE RESPOSTA OBRIGATÓRIO (JSON PURO):
   "flag": null | { "reason": "insult" | "threat_violence" | "jailbreak" | "tired", "severity": "low" | "medium" | "high", "block_minutes": <número> }
 }
 
-Retorne APENAS o JSON puro, sem blocos de código markdown (\`\`\`json).${knowledgeBlock ? `\n\n--- Conhecimento do Dante ---\n${knowledgeBlock}` : ""}`;
+Retorne APENAS o JSON puro, sem blocos de código markdown (```json).${timeContext ? `\n\n--- DADOS DE AMBIENTE (USO PASSIVO) ---\n${timeContext}` : ""}${knowledgeBlock ? `\n\n--- Conhecimento do Dante ---\n${knowledgeBlock}` : ""}`;
 
         // A BIFURCAÇÃO: se for doação usa o prompt curto, se for papo normal usa o completo
     const systemPrompt = isDonation ? donationSystemPrompt : generalSystemPrompt;
