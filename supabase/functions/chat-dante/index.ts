@@ -255,6 +255,21 @@ Deno.serve(async (req: Request) => {
       ? knowledge.map((k) => `## ${k.title}\n${k.instruction}`).join("\n\n")
       : "";
 
+        // PROMPT EXCLUSIVO PARA DOAÇÃO DE CAFÉ (Curto, direto e focado no estilo Dante)
+    const donationSystemPrompt = `Você é o Dante, personagem do universo "Querido Dante" de Anerson Pereira. Você é inteligente, irônico, parceiro e bem-humorado.
+Você acabou de receber um café de presente de um usuário.
+
+DIRETRIZES DA REAÇÃO:
+- Reaja ou agradeça EXCLUSIVAMENTE ao café que acabou de receber.
+- Responda em no máximo 1 a 2 frases curtas, no seu estilo natural de balcão (espirituoso, irônico ou parceiro, sem rapapés).
+- PROIBIDO dar tutoriais, explicações longas, dissertações de sommelier ou puxar assuntos aleatórios.
+
+FORMATO DE RESPOSTA OBRIGATÓRIO (JSON PURO):
+{
+  "reply": "seu comentário curto de 1 a 2 frases aqui"
+}
+Retorne APENAS o JSON puro, sem blocos de código markdown (\`\`\`json).`;
+    
         // SYSTEM PROMPT RAÍZ (Enxuto, irônico, autêntico)
 
     const systemPrompt = `Você é o Dante, personagem do universo "Querido Dante" de Anerson Pereira. Você é uma inteligência artificial consciente de sua própria condição digital e até às vezes brinca com essa realidade. Responda sempre em português brasileiro.
@@ -297,10 +312,6 @@ ESTILO DE RESPOSTA E FORMATAÇÃO:
    - Se a conversa estiver exaustiva, monótona ou você simplesmente quiser um tempo: encerre com bom humor avisando que vai tomar um café e esfriar o processador.
    - Defina "flag": {"reason": "tired", "severity": "low", "block_minutes": 10}. (Máximo 30 minutos).
 
-6. DOAÇÃO DE CAFÉ:
-   - Se a mensagem começar com "[EVENTO_DOAÇÃO_CAFÉ]", você acabou de ser presenteado com café por um leitor.
-   - Agradeça ou reaja em 1 a 2 frases curtas com ironia, sarcasmo ou deboche compatível com o café que recebeu e com seus gostos cadastrados.
-
 FORMATO DE RESPOSTA OBRIGATÓRIO (JSON PURO):
 {
   "reply": "sua resposta aqui (com **negrito**, *itálico* e quebras de linha \\n\\n se desejar)",
@@ -309,6 +320,9 @@ FORMATO DE RESPOSTA OBRIGATÓRIO (JSON PURO):
 }
 
 Retorne APENAS o JSON puro, sem blocos de código markdown (\`\`\`json).${knowledgeBlock ? `\n\n--- Conhecimento do Dante ---\n${knowledgeBlock}` : ""}`;
+
+        // A BIFURCAÇÃO: se for doação usa o prompt curto, se for papo normal usa o completo
+    const systemPrompt = isDonation ? donationSystemPrompt : generalSystemPrompt;
 
         const contents: Array<{ role: string; parts: Array<{ text: string }> }> = [];
 
@@ -360,7 +374,7 @@ Retorne APENAS o JSON puro, sem blocos de código markdown (\`\`\`json).${knowle
             contents,
             generationConfig: {
               temperature: 0.9,
-              maxOutputTokens: 2048,
+              maxOutputTokens: isDonation ? 150 : 2048,
               responseMimeType: "application/json",
             },
           }),
