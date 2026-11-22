@@ -3,36 +3,13 @@ import {
   COFFEE_RECEIPT_PREFIX,
   formatBlockCountdown,
   getActiveDanteBlock,
-  getCaffeineMode,
   parseCoffeeReceipt,
 } from "./danteCoffee";
-
-describe("caffeine personality modes", () => {
-  it("keeps 0–20% in abstinence mode", () => {
-    expect(getCaffeineMode(0).label).toBe("Abstinência");
-    expect(getCaffeineMode(20).label).toBe("Abstinência");
-  });
-
-  it("uses functional grumpiness from 21–50%", () => {
-    expect(getCaffeineMode(20.01).label).toBe("Ranzinza Funcional");
-    expect(getCaffeineMode(50).label).toBe("Ranzinza Funcional");
-  });
-
-  it("uses casual Dante from 51–80%", () => {
-    expect(getCaffeineMode(50.01).label).toBe("Dante Casual");
-    expect(getCaffeineMode(80).label).toBe("Dante Casual");
-  });
-
-  it("uses Silicon Valley mode above 80%", () => {
-    expect(getCaffeineMode(80.01).label).toBe("O Cara do Vale do Silício");
-    expect(getCaffeineMode(100).label).toBe("O Cara do Vale do Silício");
-  });
-});
 
 describe("Dante blocks", () => {
   const now = new Date("2026-11-18T13:00:00Z").getTime();
 
-  it("expires a tired block without turning zero caffeine into a block", () => {
+  it("expires a tired block", () => {
     expect(
       getActiveDanteBlock({ dante_blocked_until: null, dante_block_reason: null }, now),
     ).toBeNull();
@@ -66,7 +43,7 @@ describe("Dante blocks", () => {
 });
 
 describe("coffee receipt history parsing", () => {
-  it("restores all receipt values persisted by the Edge Function", () => {
+  it("restores purchases from legacy receipts without energy fields", () => {
     const content = `${COFFEE_RECEIPT_PREFIX}${JSON.stringify({
       items: [{ name: "Cafeteira Inteira", icon: "coffee", quantity: 2, price: 80 }],
       total: 80,
@@ -78,9 +55,15 @@ describe("coffee receipt history parsing", () => {
     expect(parseCoffeeReceipt(content)).toEqual({
       items: [{ name: "Cafeteira Inteira", icon: "coffee", quantity: 2, price: 80 }],
       total: 80,
-      caffeine_added: 130,
-      bottle_added: 15,
     });
+  });
+
+  it("restores gift receipts with no caffeine or acceptance data", () => {
+    const purchase = {
+      items: [{ name: "Café Especial", icon: "coffee", quantity: 1, price: 100 }],
+      total: 100,
+    };
+    expect(parseCoffeeReceipt(COFFEE_RECEIPT_PREFIX + JSON.stringify(purchase))).toEqual(purchase);
   });
 
   it("ignores ordinary messages and malformed receipts", () => {

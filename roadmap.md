@@ -1,5 +1,11 @@
 # Roadmap
 
+## Limpeza das telas — Dante 3.5
+- [x] Retirar cafeína, garrafa, notas e recusa do perfil, cardápio e recibos.
+- [x] Retirar consumo de energia e horário enviado pelo chat; preservar markdown e bloqueios.
+- [x] Retirar diagnóstico de afinidade das telas administrativas.
+- [x] Validar recibos antigos e novos, 11 testes e telas em celular e computador com dados simulados.
+
 ## Plano aprovado: Café e Chat do Dante
 - [x] Blindar o aceite das notas 8 a 10 e avaliar separadamente os cafés de lotes mistos.
 - [x] Atualizar recibos imediatamente com recusa carmim e mostrar “Avaliando café...” durante a avaliação.
@@ -16,4 +22,4 @@
 - [x] Conectar diagnóstico de afeto às últimas 20 mensagens, exclusivo para ADMIN, com atualização imediata do perfil.
 - [x] Executar 52 testes de regressão e verificar a interface com dados simulados em computador e celular.
 - [x] Publicar a função chat-dante; ferramenta confirmou envio da versão atualizada.
-- [ ] Confirmar doação e diagnóstico com uma conta real no Supabase externo: sessão autenticada indisponível neste ambiente.
+- Diagnóstico de afeto removido das telas no Dante 3.5; validação autenticada de doações permanece no item acima.

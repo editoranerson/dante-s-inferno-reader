@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { X, ShieldCheck, Lock, Check, Coins, Image as ImageIcon, Droplet, Coffee, Thermometer, CupSoda, Minus, Plus } from 'lucide-react';
+import { X, ShieldCheck, Lock, Check, Coins, Image as ImageIcon, Droplet, Coffee, Minus, Plus } from 'lucide-react';
 import { waterFor, formatMl, ML_PER_MESSAGE } from '@/lib/water';
 import danteAvatar from '@/assets/dante-avatar.webp';
 import { supabase } from '@/lib/supabase';
@@ -7,15 +7,12 @@ import { useAuth } from '@/lib/auth';
 import { useToast } from '@/components/Toast';
 import { fetchWallpapers, fetchOwnedWallpapers, getSelectedWallpaper, setSelectedWallpaper, type ChatWallpaper } from '@/lib/wallpapers';
 import {
-  formatCaffeine,
-  getCaffeineMode,
   type CoffeeDonationEvent,
   type CoffeeBatchResult,
   MAX_COFFEE_PER_ITEM,
   cartTotal,
   clampCoffeeQuantity,
   receiptFromBatch,
-  type BottleRefillResult,
   type DanteCoffeeItem,
 } from '@/lib/danteCoffee';
 import { DanteCoffeeIcon } from '@/components/DanteCoffeeIcon';
@@ -96,29 +93,21 @@ export function DanteProfileModal({ onClose, onCoffeeDonated }: DanteProfileModa
     await refreshProfile();
     setBusy('');
     setCart({});
-    onCoffeeDonated?.({ receipt: receiptFromBatch(result) });
-    toast(
-      Number(result.bottle_added ?? 0) > 0
-        ? `Café entregue! ${formatCaffeine(result.bottle_added)} do excedente foi para a Garrafa Térmica.`
-        : 'Café entregue ao Dante!',
-      'success',
-    );
+    onCoffeeDonated?.({ receipt: receiptFromBatch({
+      ...result,
+      total_price: result.total_price ?? result.total_spent ?? total,
+      items_summary: result.items_summary ?? picked.map((entry) => {
+        const item = coffeeItems.find((coffee) => coffee.id === entry.item_id);
+        return {
+          name: item?.name ?? 'Café',
+          icon: item?.icon ?? 'coffee',
+          quantity: entry.quantity,
+          total_price: (item?.price_dantes ?? 0) * entry.quantity,
+        };
+      }),
+    }) });
+    toast('Café entregue ao Dante!', 'success');
   };
-
-  const refill = async () => {
-    if (!user) return;
-    setBusy('bottle');
-    const { data, error } = await supabase.rpc('refill_dante_from_bottle', { p_amount: null });
-    setBusy('');
-    const result = data as BottleRefillResult | null;
-    if (error || !result?.success) return toast(result?.error || error?.message || 'Não foi possível servir da garrafa.', 'error');
-    await refreshProfile();
-    toast(`${formatCaffeine(result.transferred)} servidos sem gastar nenhum Dante!`, 'success');
-  };
-
-  const caffeine = Number(profile?.caffeine_level ?? 80);
-  const bottle = Number(profile?.caffeine_bottle ?? 0);
-  const mode = getCaffeineMode(caffeine);
 
   return (
     <div className="absolute inset-0 z-20 flex flex-col bg-ink-900/98 animate-fade-in">
@@ -143,7 +132,7 @@ export function DanteProfileModal({ onClose, onCoffeeDonated }: DanteProfileModa
           {([
             ['wallpaper', ImageIcon, 'Papel de parede'],
             ['water', Droplet, 'Gasto de água'],
-            ['coffee', Coffee, 'Café & Energia'],
+            ['coffee', Coffee, 'Cafés'],
           ] as const).map(([id, Icon, label]) => (
             <button key={id} onClick={() => setTab(id)}
               className={`flex flex-col items-center gap-1 rounded-xl border px-2 py-2.5 text-[11px] font-semibold transition ${tab === id ? 'border-fuchsia-400/60 bg-fuchsia-500/15 text-fuchsia-100' : 'border-white/10 bg-white/5 text-grape-200/70 hover:bg-white/10'}`}>
@@ -156,49 +145,10 @@ export function DanteProfileModal({ onClose, onCoffeeDonated }: DanteProfileModa
 
         {tab === 'coffee' && (
           <div className="mt-5 space-y-4">
-            <section className="rounded-2xl border border-gold-400/20 bg-gold-400/5 p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2 text-sm font-semibold text-grape-50"><Thermometer size={17} className="text-gold-400" /> Termômetro de cafeína</div>
-                <span className="font-dante text-2xl font-semibold text-gold-400">{formatCaffeine(caffeine)}</span>
-              </div>
-              <div className="mt-3 h-3 overflow-hidden rounded-full bg-white/10" role="progressbar" aria-label="Nível de cafeína" aria-valuemin={0} aria-valuemax={100} aria-valuenow={caffeine}>
-                <div className="h-full rounded-full bg-gradient-to-r from-grape-500 via-rose-500 to-gold-400 transition-all duration-500" style={{ width: `${Math.max(0, Math.min(100, caffeine))}%` }} />
-              </div>
-              <div className="mt-3 flex items-start gap-3">
-                <span className="text-3xl" aria-hidden="true">{mode.emoji}</span>
-                <div>
-                  <p className="text-sm font-semibold text-grape-50">{mode.label}</p>
-                  <p className="mt-0.5 text-xs leading-relaxed text-grape-200/60">{mode.description}</p>
-                </div>
-              </div>
-            </section>
-
-            <section className="rounded-2xl border border-sky2-400/20 bg-sky2-400/5 p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <CupSoda size={19} className="text-sky2-300" />
-                  <div>
-                    <h3 className="text-sm font-semibold text-grape-50">Sua Garrafa Térmica</h3>
-                    <p className="text-[11px] text-grape-200/50">50% do excedente de cada café fica guardado aqui.</p>
-                  </div>
-                </div>
-                <span className="font-dante text-xl font-semibold text-sky2-300">{formatCaffeine(bottle)}</span>
-              </div>
-              <button
-                onClick={refill}
-                disabled={busy === 'bottle' || bottle <= 0 || caffeine >= 100}
-                className="btn-ghost mt-3 w-full py-2 text-xs disabled:opacity-40"
-              >
-                <Coffee size={15} />
-                {busy === 'bottle' ? 'Servindo...' : caffeine >= 100 ? 'Dante já está a 100%' : bottle <= 0 ? 'Garrafa vazia' : 'Servir da Garrafa (grátis)'}
-              </button>
-            </section>
-
             <section>
               <div className="mb-3 flex items-center justify-between gap-2">
                 <div>
                   <h3 className="text-sm font-semibold text-grape-50">Cardápio do Dante</h3>
-                  <p className="text-[11px] text-grape-200/50">Doações funcionam mesmo durante uma pausa do chat.</p>
                 </div>
                 <span className="flex items-center gap-1 whitespace-nowrap text-xs text-gold-400"><Coins size={12} /> {profile?.points ?? 0}</span>
               </div>
@@ -217,8 +167,7 @@ export function DanteProfileModal({ onClose, onCoffeeDonated }: DanteProfileModa
                         <div className="min-w-0 flex-1">
                           <h4 className="text-sm font-semibold text-grape-50">{item.name}</h4>
                           <p className="mt-0.5 text-[11px] leading-relaxed text-grape-200/50">{item.description}</p>
-                          <p className="mt-1 text-xs font-medium text-gold-400">+{formatCaffeine(item.caffeine_pct)} cafeína · {item.price_dantes} Dantes</p>
-                          <p className="mt-0.5 text-[11px] font-semibold text-grape-200/80">Nota do Dante sobre o café: {Number(item.dante_rating ?? 5) < 0 ? '< 0' : `${Number(item.dante_rating ?? 5)}/10`}</p>
+                          <p className="mt-1 text-xs font-medium text-gold-400">{item.price_dantes} Dantes</p>
                         </div>
                       </div>
                       <div className="mt-3 flex items-center justify-end gap-3">

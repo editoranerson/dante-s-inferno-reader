@@ -40,7 +40,6 @@ import {
 } from 'lucide-react';
 import {
   supabase,
-  SUPABASE_URL,
   CARD_TYPE_LABELS,
   type CardType,
   type Character,
@@ -80,7 +79,6 @@ import { DanteCoffeeAdmin } from '@/components/admin/DanteCoffeeAdmin';
 import { DanteReportsAdmin } from '@/components/admin/DanteReportsAdmin';
 import { CoffeeReceiptCard } from '@/components/CoffeeReceiptCard';
 import { parseCoffeeReceipt } from '@/lib/danteCoffee';
-import { Button } from '@/components/ui/button';
 
 type AdminTab =
   | 'personagens'
@@ -1078,7 +1076,6 @@ function UsersAdmin() {
   const [cardId, setCardId] = useState('');
   const [granting, setGranting] = useState(false);
   const [moderating, setModerating] = useState(false);
-  const [analyzingAffection, setAnalyzingAffection] = useState(false);
   const [planGrant, setPlanGrant] = useState<PlanType>('free');
   const [planExpiry, setPlanExpiry] = useState('');
 
@@ -1173,35 +1170,6 @@ function UsersAdmin() {
     }, `Chat suspenso por ${durationHours} horas.`);
   };
 
-  const analyzeAffection = async () => {
-    if (!selected || analyzingAffection) return;
-    const targetId = selected.id;
-    setAnalyzingAffection(true);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Faça login novamente.');
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/chat-dante`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ event_type: 'analyze_affection', target_user_id: targetId }),
-      });
-      const data = await response.json();
-      if (!response.ok || !data.profile || data.profile.id !== targetId) throw new Error(data.error || 'Não foi possível gerar o diagnóstico.');
-      const patch: Partial<Profile> = {
-        dante_affection_pct: data.profile.dante_affection_pct,
-        dante_affection_title: data.profile.dante_affection_title,
-        dante_affection_summary: data.profile.dante_affection_summary,
-        dante_affection_updated_at: data.profile.dante_affection_updated_at,
-      };
-      setSelected((current) => current?.id === targetId ? { ...current, ...patch } : current);
-      setUsers((current) => current.map((user) => user.id === targetId ? { ...user, ...patch } : user));
-      toast('Diagnóstico de afeto atualizado.', 'success');
-    } catch (error) {
-      toast(error instanceof Error ? error.message : 'Não foi possível gerar o diagnóstico.', 'error');
-    } finally {
-      setAnalyzingAffection(false);
-    }
-  };
 
   return (
     <div>
@@ -1225,7 +1193,7 @@ function UsersAdmin() {
                   {u.role === 'admin' && <span className="ml-2 chip bg-gold-400/15 text-gold-400 text-[10px]">ADMIN</span>}
                 </p>
                 <p className="truncate text-xs text-grape-200/50">
-                  {u.points} Dantes · {Number(u.caffeine_level ?? 50).toLocaleString('pt-BR')}% cafeína
+                  {u.points} Dantes
                   {u.dante_immunity ? ' · Imune' : ''}
                 </p>
               </div>
@@ -1279,22 +1247,8 @@ function UsersAdmin() {
             </div>
 
             <div className="rounded-xl border border-rose-400/20 bg-rose-500/5 p-4">
-              <label className="label flex items-center gap-1.5"><Shield size={14} /> Dante: cafeína, afeto e moderação</label>
-              <div className="grid grid-cols-2 gap-2 text-xs text-grape-200/70">
-                <p>Cafeína: <strong className="text-grape-50">{Number(selected.caffeine_level ?? 50).toLocaleString('pt-BR')}%</strong></p>
-                <p>Garrafa: <strong className="text-grape-50">{Number(selected.caffeine_bottle ?? 0).toLocaleString('pt-BR')}%</strong></p>
-                <p>Afeto: <strong className="text-grape-50">{Number(selected.dante_affection_pct ?? 50).toLocaleString('pt-BR')}%</strong></p>
-                <p>Bloqueio: <strong className="text-grape-50">{selected.dante_blocked_until && new Date(selected.dante_blocked_until).getTime() > Date.now() ? `até ${new Date(selected.dante_blocked_until).toLocaleString('pt-BR')}` : 'nenhum'}</strong></p>
-              </div>
-              <div className="mt-3 rounded-lg bg-white/5 p-3">
-                <p className="text-sm font-semibold text-grape-50">{selected.dante_affection_title || 'Sobrevivente Resiliente'}</p>
-                <p className="mt-1 text-xs leading-relaxed text-grape-200/60">{selected.dante_affection_summary || 'O diagnóstico de afeto ainda não foi atualizado.'}</p>
-                {selected.dante_affection_updated_at && <p className="mt-1 text-[10px] text-grape-200/40">Analisado em {new Date(selected.dante_affection_updated_at).toLocaleString('pt-BR')}</p>}
-                <Button size="sm" variant="outline" className="mt-3 h-auto min-h-8 w-full whitespace-normal" disabled={analyzingAffection} onClick={analyzeAffection}>
-                  <Brain size={14} />
-                  {analyzingAffection ? 'Dante está avaliando o histórico...' : selected.dante_affection_updated_at ? 'Reanalisar afeto' : 'Gerar diagnóstico com IA'}
-                </Button>
-              </div>
+              <label className="label flex items-center gap-1.5"><Shield size={14} /> Dante: moderação</label>
+              <p className="text-xs text-grape-200/70">Bloqueio: <strong className="text-grape-50">{selected.dante_blocked_until && new Date(selected.dante_blocked_until).getTime() > Date.now() ? `até ${new Date(selected.dante_blocked_until).toLocaleString('pt-BR')}` : 'nenhum'}</strong></p>
               <div className="mt-3 flex flex-wrap gap-2">
                 {[2, 12, 24].map((duration) => (
                   <button key={duration} disabled={moderating} onClick={() => suspendDante(duration)} className="btn-danger px-3 py-1.5 text-xs">Suspender {duration}h</button>

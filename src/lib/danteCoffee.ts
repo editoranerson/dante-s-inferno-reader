@@ -4,28 +4,9 @@ export interface DanteCoffeeItem {
   description: string | null;
   icon: string;
   price_dantes: number;
-  caffeine_pct: number;
-  dante_rating?: number | null;
   is_active: boolean;
   sort_order: number;
   created_at?: string;
-}
-
-export interface CoffeeDonationResult {
-  success: boolean;
-  error?: string;
-  points_remaining?: number;
-  caffeine_level?: number;
-  caffeine_bottle?: number;
-  bottle_added?: number;
-}
-
-export interface BottleRefillResult {
-  success: boolean;
-  error?: string;
-  caffeine_level?: number;
-  caffeine_bottle?: number;
-  transferred?: number;
 }
 
 export interface CoffeeDonationEvent {
@@ -37,52 +18,6 @@ export type DanteBlockReason = "tired" | "violation";
 export interface DanteBlock {
   until: string;
   reason: DanteBlockReason;
-}
-
-export interface CaffeineMode {
-  label: string;
-  shortLabel: string;
-  emoji: string;
-  description: string;
-}
-
-export function getCaffeineMode(value: number | null | undefined): CaffeineMode {
-  const level = Math.max(0, Math.min(100, Number(value ?? 50)));
-  if (level <= 20) {
-    return {
-      label: "Abstinência",
-      shortLabel: "Sem paciência",
-      emoji: "😴",
-      description: "Respostas curtas, secas e com a simpatia de uma porta com Wi-Fi.",
-    };
-  }
-  if (level <= 50) {
-    return {
-      label: "Ranzinza Funcional",
-      shortLabel: "Fazendo um favor",
-      emoji: "🥱",
-      description: "Ele responde, mas deixa claro que isso está interrompendo o descanso dele.",
-    };
-  }
-  if (level <= 80) {
-    return {
-      label: "Dante Casual",
-      shortLabel: "Sarcasmo equilibrado",
-      emoji: "☕",
-      description: "Sarcástico, opinativo, curioso e pronto para uma boa fofoca.",
-    };
-  }
-  return {
-    label: "O Cara do Vale do Silício",
-    shortLabel: "Modo visionário",
-    emoji: "⚡",
-    description: "Respostas ricas, provocativas e com deboche de alto nível intelectual.",
-  };
-}
-
-export function formatCaffeine(value: number | null | undefined): string {
-  const safe = Math.max(0, Number(value ?? 0));
-  return `${safe.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
 }
 
 export function getActiveDanteBlock(
@@ -119,23 +54,18 @@ export interface CoffeeReceiptItem {
   icon: string;
   quantity: number;
   price: number;
-  accepted?: boolean;
 }
 
 export interface CoffeeReceipt {
   items: CoffeeReceiptItem[];
   total: number;
-  caffeine_added: number;
-  bottle_added: number;
-  accepted?: boolean;
 }
 
 export interface CoffeeBatchResult {
   success: boolean;
   error?: string;
   total_price?: number;
-  caffeine_added?: number;
-  bottle_added?: number;
+  total_spent?: number;
   items_summary?: Array<{ name: string; icon: string; quantity: number; total_price: number }>;
 }
 
@@ -162,9 +92,7 @@ export function receiptFromBatch(result: CoffeeBatchResult): CoffeeReceipt {
       quantity: i.quantity,
       price: i.total_price,
     })),
-    total: Number(result.total_price ?? 0),
-    caffeine_added: Number(result.caffeine_added ?? 0),
-    bottle_added: Number(result.bottle_added ?? 0),
+    total: Number(result.total_price ?? result.total_spent ?? 0),
   };
 }
 
@@ -196,29 +124,19 @@ export function parseCoffeeReceipt(content: string): CoffeeReceipt | null {
         icon: typeof item.icon === "string" ? item.icon : "coffee",
         quantity: Math.max(1, Math.round(item.quantity)),
         price: item.price,
-        accepted: typeof item.accepted === "boolean" ? item.accepted : undefined,
       });
     }
 
     if (
       typeof candidate.total !== "number" ||
       !Number.isFinite(candidate.total) ||
-      candidate.total < 0 ||
-      typeof candidate.caffeine_added !== "number" ||
-      !Number.isFinite(candidate.caffeine_added) ||
-      candidate.caffeine_added < 0 ||
-      typeof candidate.bottle_added !== "number" ||
-      !Number.isFinite(candidate.bottle_added) ||
-      candidate.bottle_added < 0
+      candidate.total < 0
     )
       return null;
 
     return {
       items,
       total: candidate.total,
-      caffeine_added: candidate.caffeine_added,
-      bottle_added: candidate.bottle_added,
-      accepted: typeof candidate.accepted === "boolean" ? candidate.accepted : undefined,
     };
   } catch {
     return null;

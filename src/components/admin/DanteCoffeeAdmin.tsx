@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Coffee, Pencil, Plus, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { formatCaffeine, type DanteCoffeeItem } from '@/lib/danteCoffee';
+import { type DanteCoffeeItem } from '@/lib/danteCoffee';
 import { useToast } from '@/components/Toast';
 import { Modal } from '@/components/Modal';
 import { DanteCoffeeIcon } from '@/components/DanteCoffeeIcon';
@@ -11,8 +11,6 @@ const EMPTY = {
   description: '',
   icon: 'coffee',
   price_dantes: 15,
-  caffeine_pct: 20,
-  dante_rating: 5,
   sort_order: 0,
   is_active: true,
 };
@@ -54,8 +52,6 @@ export function DanteCoffeeAdmin() {
       description: item.description ?? '',
       icon: item.icon,
       price_dantes: item.price_dantes,
-      caffeine_pct: item.caffeine_pct,
-      dante_rating: Number(item.dante_rating ?? 5),
       sort_order: item.sort_order,
       is_active: item.is_active,
     });
@@ -64,12 +60,8 @@ export function DanteCoffeeAdmin() {
 
   const save = async () => {
     if (!form.name.trim()) return toast('Dê um nome ao café.', 'error');
-    if (form.dante_rating < -100 || form.dante_rating > 10) {
-      toast('A nota do Dante vai de -100 a 10.', 'error');
-      return;
-    }
-    if (form.price_dantes <= 0 || form.caffeine_pct <= 0) {
-      return toast('Preço e cafeína precisam ser maiores que zero.', 'error');
+    if (!Number.isFinite(form.price_dantes) || form.price_dantes <= 0) {
+      return toast('O preço precisa ser maior que zero.', 'error');
     }
     setSaving(true);
     const payload = { ...form, name: form.name.trim(), description: form.description.trim() || null };
@@ -105,7 +97,7 @@ export function DanteCoffeeAdmin() {
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="font-display text-xl font-semibold text-grape-50">Cafés do Dante</h2>
-          <p className="text-sm text-grape-200/60">Gerencie preços, cafeína e a ordem do cardápio.</p>
+          <p className="text-sm text-grape-200/60">Cafés para presentear o Dante.</p>
         </div>
         <button onClick={openNew} className="btn-primary py-2"><Plus size={16} /> Novo café</button>
       </div>
@@ -128,7 +120,7 @@ export function DanteCoffeeAdmin() {
                     <span className="rounded-full bg-white/5 px-2 py-0.5 text-[10px] text-grape-200/60">#{item.sort_order}</span>
                   </div>
                   <p className="mt-1 text-xs text-grape-200/60">{item.description}</p>
-                  <p className="mt-2 text-sm text-gold-400">{item.price_dantes} Dantes · +{formatCaffeine(item.caffeine_pct)} cafeína · Nota do Dante: {Number(item.dante_rating ?? 5)}/10</p>
+                  <p className="mt-2 text-sm text-gold-400">{item.price_dantes} Dantes</p>
                 </div>
               </div>
               <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-white/10 pt-3">
@@ -159,14 +151,6 @@ export function DanteCoffeeAdmin() {
             <div>
               <label className="label">Preço em Dantes</label>
               <input type="number" min="1" className="input" value={form.price_dantes} onChange={(e) => setForm({ ...form, price_dantes: Number(e.target.value) })} />
-            </div>
-            <div>
-              <label className="label">Cafeína (%)</label>
-              <input type="number" min="0.01" step="0.01" className="input" value={form.caffeine_pct} onChange={(e) => setForm({ ...form, caffeine_pct: Number(e.target.value) })} />
-            </div>
-            <div>
-              <label className="label">Nota do Dante (-100 a 10)</label>
-              <input type="number" min="-100" max="10" step="0.5" className="input" value={form.dante_rating} onChange={(e) => setForm({ ...form, dante_rating: Number(e.target.value) })} />
             </div>
             <div>
               <label className="label">Ícone</label>

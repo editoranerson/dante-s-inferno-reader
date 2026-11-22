@@ -56,31 +56,6 @@ interface UIMessage {
 
 const DANTE_GRADIENT = "linear-gradient(135deg, #7F00FF, #FF007F)";
 
-function createClientDateTime(now = new Date()) {
-  const date = new Intl.DateTimeFormat("pt-BR", {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  }).format(now);
-  const time = new Intl.DateTimeFormat("pt-BR", {
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZoneName: "short",
-  }).format(now);
-  const weekday = new Intl.DateTimeFormat("pt-BR", { weekday: "long" }).format(now);
-  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-
-  return {
-    iso: now.toISOString(),
-    date,
-    time,
-    weekday,
-    timezone,
-    context: `Hoje é ${date} (${weekday}), horário local: ${time} (fuso ${timezone}).`,
-  };
-}
-
 function Sarcasmometer({ score }: { score: number }) {
   const clamped = Math.max(0, Math.min(100, score));
   const gradient = "linear-gradient(to right, #38BDF8, #B5E853, #FFC226, #FF8C42, #EF4444)";
@@ -117,13 +92,11 @@ export function DanteChat() {
   const [messages, setMessages] = useState<UIMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [evaluatingCoffee, setEvaluatingCoffee] = useState(false);
   const [credits, setCredits] = useState<number>(0);
   const [breaks, setBreaks] = useState<DanteBreak[]>([]);
   const [activeBreak, setActiveBreak] = useState<DanteBreak | null>(null);
   const [powerState, setPowerState] = useState<DantePowerState>({ enabled: true, message: "" });
   const [sarcasmScore, setSarcasmScore] = useState<number | null>(null);
-  const [energySpent, setEnergySpent] = useState<number | null>(null);
   const [danteBlock, setDanteBlock] = useState<DanteBlock | null>(null);
   const [blockNow, setBlockNow] = useState(Date.now());
   const [chatInserts, setChatInserts] = useState<Record<string, AdBanner>>({});
@@ -165,9 +138,7 @@ export function DanteChat() {
       },
     ]);
     setLoading(true);
-    setEvaluatingCoffee(true);
     setSarcasmScore(null);
-    setEnergySpent(null);
 
     try {
       const { data: session } = await supabase.auth.getSession();
@@ -187,13 +158,11 @@ export function DanteChat() {
         },
         body: JSON.stringify({
           event_type: "coffee_donation",
-          client_datetime: createClientDateTime(),
         }),
       });
       const data = (await res.json().catch(() => null)) as {
         reply?: string;
         error?: string;
-        coffee_accepted?: boolean;
         coffee_receipt?: CoffeeReceipt;
       } | null;
 
@@ -208,12 +177,7 @@ export function DanteChat() {
       }
 
       const confirmedReply = data.reply;
-      const confirmedReceipt = data.coffee_receipt ?? {
-        ...receipt,
-        accepted: data.coffee_accepted,
-        caffeine_added: data.coffee_accepted === false ? 0 : receipt.caffeine_added,
-        bottle_added: data.coffee_accepted === false ? 0 : receipt.bottle_added,
-      };
+      const confirmedReceipt = data.coffee_receipt ?? receipt;
       setMessages((prev) => [
         ...prev.map((message) => message.id === receiptId ? { ...message, receipt: confirmedReceipt } : message),
         {
@@ -227,9 +191,7 @@ export function DanteChat() {
       toast("Café entregue e recibo salvo, mas a conexão caiu antes do agradecimento.", "error");
     } finally {
       setLoading(false);
-      setEvaluatingCoffee(false);
       setSarcasmScore(null);
-      setEnergySpent(null);
       await refreshProfile();
     }
   };
@@ -359,7 +321,6 @@ export function DanteChat() {
     setInput("");
     setLoading(true);
     setSarcasmScore(null);
-    setEnergySpent(null);
 
     try {
       const { data: session } = await supabase.auth.getSession();
@@ -376,7 +337,6 @@ export function DanteChat() {
         },
         body: JSON.stringify({
           message: userMsg.content,
-          client_datetime: createClientDateTime(),
         }),
       });
 
@@ -432,7 +392,7 @@ export function DanteChat() {
               : "tired",
         });
         setBlockNow(Date.now());
-        if (!data.energy_spent) {
+        if (data.credits === undefined) {
           setMessages((prev) => [
             ...prev.filter((m) => m.id !== userMsg.id),
             { id: `blocked-${Date.now()}`, role: "assistant", content: data.reply },
@@ -476,10 +436,6 @@ export function DanteChat() {
         setSarcasmScore(Math.max(0, Math.min(100, Math.round(data.sarcasm_score))));
       } else {
         setSarcasmScore(0);
-      }
-
-      if (typeof data.energy_spent === "number") {
-        setEnergySpent(Math.max(1, Math.min(7, Math.round(data.energy_spent))));
       }
 
       if (typeof data.credits === "number") {
@@ -612,10 +568,10 @@ export function DanteChat() {
                   <h3 className="flex items-center gap-2 font-dante text-lg font-semibold text-grape-50">
                     Dante
                     <span
-                      title="Dante 3.0"
+                      title="Dante 3.5"
                       className="inline-flex items-center gap-1 rounded-full border border-fuchsia-400/30 bg-fuchsia-500/10 px-2 py-0.5 text-[10px] font-semibold text-fuchsia-200"
                     >
-                      <Zap size={11} className="text-fuchsia-300" /> 3.0
+                      <Zap size={11} className="text-fuchsia-300" /> 3.5
                     </span>
                   </h3>
                   <p className="flex items-center gap-1 text-xs text-grape-200/60">
@@ -707,7 +663,7 @@ export function DanteChat() {
                     className="mb-3 h-14 w-14 mx-auto rounded-full object-cover flex-shrink-0"
                   />
                   <p className="text-sm text-grape-200/60">
-                    Olá! Sou o Dante. Como posso te ajudar hoje?
+                    Dante
                   </p>
                 </div>
               )}
@@ -822,12 +778,12 @@ export function DanteChat() {
                   />
                   <div className="dante-bubble-border flex flex-col gap-1 rounded-2xl bg-ink-700/60 px-4 py-2.5">
                     <div className="flex items-center">
-                      <span className="text-sm text-grape-200/60">{evaluatingCoffee ? "Avaliando café..." : "Dante está pensando"}</span>
-                      {!evaluatingCoffee && <span className="ml-1 flex gap-0.5">
+                      <span className="text-sm text-grape-200/60">Dante está pensando</span>
+                      <span className="ml-1 flex gap-0.5">
                         <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-grape-300 [animation-delay:0ms]" />
                         <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-grape-300 [animation-delay:150ms]" />
                         <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-grape-300 [animation-delay:300ms]" />
-                      </span>}
+                      </span>
                     </div>
                     {sarcasmScore !== null && <Sarcasmometer score={sarcasmScore} />}
                   </div>
@@ -837,19 +793,11 @@ export function DanteChat() {
               {!loading &&
                 sarcasmScore !== null &&
                 messages.length > 0 &&
-                messages[messages.length - 1].role === "assistant" && (
+                messages[messages.length - 1]?.role === "assistant" && (
                   <div className="flex gap-2.5 justify-start">
                     <div className="w-8 flex-shrink-0" />
                     <div className="max-w-[75%] flex-1">
                       <Sarcasmometer score={sarcasmScore} />
-                      {energySpent !== null && (
-                        <span
-                          className="mt-1 inline-flex items-center gap-1 rounded-full border border-gold-400/20 bg-gold-400/5 px-2 py-0.5 text-[10px] text-gold-400"
-                          title="Cafeína consumida nesta resposta"
-                        >
-                          <Zap size={10} /> −{energySpent}% de cafeína
-                        </span>
-                      )}
                     </div>
                   </div>
                 )}

@@ -42,9 +42,7 @@
   --color-gold-400: #fbbf24;
   --color-gold-500: #f59e0b;
   --color-coffee-matte: #161616;
-  --color-coffee-rejected: #dc566c;
   --coffee-border: linear-gradient(120deg, #3c200c, #c88a35, #f5e6c8, #c88a35, #3c200c);
-  --coffee-rejected-border: linear-gradient(120deg, #701c30, #ba2848, #ef8c9e, #ba2848, #701c30);
 
   --font-sans: "Plus Jakarta Sans", system-ui, sans-serif;
   --font-display: "Fraunces", Georgia, serif;
@@ -793,9 +791,6 @@ html.light .border-white\/10.bg-ink-700\/60 {
   mask-composite: exclude;
   animation: dante-coffee-border-flow 8s linear infinite;
   pointer-events: none;
-}
-.dante-coffee-receipt-rejected::before {
-  background-image: var(--coffee-rejected-border);
 }
 @keyframes dante-coffee-border-flow {
   0% {

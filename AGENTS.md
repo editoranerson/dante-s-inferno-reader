@@ -35,3 +35,4 @@ use the editor.
 - The donation RPC repeats batch caffeine and bottle totals on each row; reversal reads the first row and recomputes accepted fuel to avoid multiplying deductions.
 - Donation generation uses an isolated prompt and no conversation history, temporal context, knowledge additions or caffeine mode; state remains available only for accounting.
 - Affection analysis is dispatched by the existing imported Dante handler before chat accounting, verifies the caller through the authenticated admin RPC, and saves only the four diagnostic fields after validating model output.
+- Browser coffee receipts normalize old and new donation records to items and purchase totals only; legacy energy and acceptance fields must not restore removed controls.
