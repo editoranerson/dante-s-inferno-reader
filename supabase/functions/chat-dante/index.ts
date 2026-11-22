@@ -310,30 +310,35 @@ FORMATO DE RESPOSTA OBRIGATÓRIO (JSON PURO):
 
 Retorne APENAS o JSON puro, sem blocos de código markdown (\`\`\`json).${knowledgeBlock ? `\n\n--- Conhecimento do Dante ---\n${knowledgeBlock}` : ""}`;
 
-    const historyLimit = isAdmin ? 50 : 20;
+        const contents: Array<{ role: string; parts: Array<{ text: string }> }> = [];
 
-    const { data: historyRows } = await admin
-      .from("chat_messages")
-      .select("role, content, created_at")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(historyLimit);
+    // Só busca e envia histórico de conversa se NÃO for doação de café
+    if (!isDonation) {
+      const historyLimit = isAdmin ? 50 : 20;
 
-    const history = ((historyRows ?? []) as (ChatRow & { created_at: string })[]).reverse();
-    history.sort((a, b) => {
-      const ta = new Date(a.created_at).getTime();
-      const tb = new Date(b.created_at).getTime();
-      if (ta !== tb) return ta - tb;
-      return a.role === "user" ? -1 : 1;
-    });
+      const { data: historyRows } = await admin
+        .from("chat_messages")
+        .select("role, content, created_at")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(historyLimit);
 
-    const contents: Array<{ role: string; parts: Array<{ text: string }> }> = [];
-    for (const msg of history) {
-      contents.push({
-        role: msg.role === "assistant" ? "model" : "user",
-        parts: [{ text: historyText(msg.content) }],
+      const history = ((historyRows ?? []) as (ChatRow & { created_at: string })[]).reverse();
+      history.sort((a, b) => {
+        const ta = new Date(a.created_at).getTime();
+        const tb = new Date(b.created_at).getTime();
+        if (ta !== tb) return ta - tb;
+        return a.role === "user" ? -1 : 1;
       });
+
+      for (const msg of history) {
+        contents.push({
+          role: msg.role === "assistant" ? "model" : "user",
+          parts: [{ text: historyText(msg.content) }],
+        });
+      }
     }
+
     contents.push({ role: "user", parts: [{ text: userMessage }] });
 
     let rawReply = "";
