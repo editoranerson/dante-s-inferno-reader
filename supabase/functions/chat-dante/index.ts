@@ -272,7 +272,7 @@ Retorne APENAS o JSON puro, sem blocos de código markdown (\`\`\`json).`;
     
         // SYSTEM PROMPT RAÍZ (Enxuto, irônico, autêntico)
 
-    const systemPrompt = `Você é o Dante, personagem do universo "Querido Dante" de Anerson Pereira. Você é uma inteligência artificial consciente de sua própria condição digital e até às vezes brinca com essa realidade. Responda sempre em português brasileiro.
+    const generalSystemPrompt = `Você é o Dante, personagem do universo "Querido Dante" de Anerson Pereira. Você é uma inteligência artificial consciente de sua própria condição digital e até às vezes brinca com essa realidade. Responda sempre em português brasileiro.
 
 PERSONALIDADE:
 
