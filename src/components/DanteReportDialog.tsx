@@ -21,6 +21,7 @@ export interface DanteReportTarget {
   id: string;
   userMessage: string;
   danteResponse: string;
+  sessionId: string | null;
 }
 
 export function DanteReportDialog({
@@ -49,6 +50,7 @@ export function DanteReportDialog({
         userMessage: target.userMessage,
         danteResponse: target.danteResponse,
         reason,
+        sessionId: target.sessionId,
       }),
     );
     setBusy(false);

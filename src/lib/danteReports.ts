@@ -53,6 +53,7 @@ export function createDanteReportPayload(input: {
   userMessage: string;
   danteResponse: string;
   reason: DanteReportReason;
+  sessionId?: string | null;
 }) {
   return {
     user_id: input.userId,
@@ -61,5 +62,6 @@ export function createDanteReportPayload(input: {
     reason_type: input.reason,
     severity: "medium",
     status: "pending",
+    ...(input.sessionId ? { session_id: input.sessionId } : {}),
   };
 }

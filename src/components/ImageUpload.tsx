@@ -22,7 +22,7 @@ export function ImageUpload({ onUploaded, currentUrl, folder = 'misc', label = '
       const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
       const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
       const { error } = await supabase.storage.from(MEDIA_BUCKET).upload(path, file, {
-        cacheControl: '31536000' // 1 ano de cache no navegador
+        cacheControl: '31536000', // 1 ano de cache no navegador
         upsert: false,
         contentType: file.type,
       });

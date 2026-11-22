@@ -1,5 +1,11 @@
 # Roadmap
 
+## Sessões de chat
+- [ ] Montar gaveta de sessões ativas e arquivadas com menus e cotas independentes.
+- [ ] Separar histórico, envio de mensagens, doações e denúncias pela sessão selecionada.
+- [ ] Manter arquivo somente para leitura e exclusão via RPC com trava de denúncia.
+- [ ] Testar regras e verificar as telas em celular e computador; acesso autenticado real depende do Supabase externo.
+
 ## Limpeza das telas — Dante 3.5
 - [x] Retirar cafeína, garrafa, notas e recusa do perfil, cardápio e recibos.
 - [x] Retirar consumo de energia e horário enviado pelo chat; preservar markdown e bloqueios.

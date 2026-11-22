@@ -14,6 +14,10 @@ import {
   Coffee,
   Clock,
   Flag,
+  Menu,
+  Archive,
+  ArchiveRestore,
+  LoaderCircle,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { useAuth } from "@/lib/auth";
@@ -27,6 +31,9 @@ import { DanteProfileModal } from "@/components/DanteProfileModal";
 import { CoffeeReceiptCard } from "@/components/CoffeeReceiptCard";
 import { DanteReportDialog, type DanteReportTarget } from "@/components/DanteReportDialog";
 import { findReportUserMessage } from "@/lib/danteReports";
+import { Button } from "@/components/ui/button";
+import { ChatSessionsDrawer } from "@/components/ChatSessionsDrawer";
+import { canSendToSession, fetchChatSessions, fetchSessionLimit, mutateChatSession, sessionHistoryScope, type ChatSession } from "@/lib/chatSessions";
 import { getSelectedWallpaper } from "@/lib/wallpapers";
 import {
   formatBlockCountdown,
@@ -122,6 +129,22 @@ export function DanteChat() {
   const [chatInserts, setChatInserts] = useState<Record<string, AdBanner>>({});
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [reportTarget, setReportTarget] = useState<DanteReportTarget | null>(null);
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const [legacySelected, setLegacySelected] = useState(false);
+  const [hasLegacy, setHasLegacy] = useState(false);
+  const [showSessions, setShowSessions] = useState(true);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [sessionsError, setSessionsError] = useState("");
+  const [sessionLimit, setSessionLimit] = useState<number | null>(null);
+  const [pendingSessionIds, setPendingSessionIds] = useState<Set<string>>(new Set());
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState("");
+  const [historyLimit, setHistoryLimit] = useState(100);
+  const [hasOlder, setHasOlder] = useState(false);
+  const selectedSession = sessions.find((item) => item.id === selectedSessionId) ?? null;
+  const sessionWritable = canSendToSession(selectedSession) && !legacySelected;
+  const historyRequestRef = useRef(0);
   const interactionsRef = useRef(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -142,6 +165,7 @@ export function DanteChat() {
       id: message.id,
       userMessage: findReportUserMessage(messages, message.id),
       danteResponse: message.content,
+      sessionId: selectedSessionId,
     });
   };
 
@@ -178,6 +202,7 @@ export function DanteChat() {
         },
         body: JSON.stringify({
           event_type: "coffee_donation",
+          session_id: selectedSessionId,
         }),
       });
       const data = (await res.json().catch(() => null)) as {
@@ -216,14 +241,73 @@ export function DanteChat() {
     }
   };
 
-  const loadHistory = useCallback(async () => {
+  const loadSessions = useCallback(async () => {
     if (!user) return;
-    const { data } = await supabase
+    setSessionsLoading(true);
+    setSessionsError("");
+    try {
+      const [rows, limit, legacy, reports] = await Promise.all([
+        fetchChatSessions(user.id),
+        fetchSessionLimit(user.id),
+        supabase.from("chat_messages").select("id").eq("user_id", user.id).is("session_id", null).limit(1),
+        supabase.from("dante_reports").select("session_id").eq("user_id", user.id).eq("status", "pending"),
+      ]);
+      setSessions(rows);
+      setSessionLimit(limit);
+      setHasLegacy(!!legacy.data?.length);
+      setPendingSessionIds(new Set((reports.data ?? []).flatMap((report) => typeof report.session_id === "string" ? [report.session_id] : [])));
+      return rows;
+    } catch (error) {
+      setSessionsError(error instanceof Error ? error.message : "Não foi possível carregar suas sessões.");
+    } finally {
+      setSessionsLoading(false);
+    }
+  }, [user?.id]);
+
+  const selectSession = (id: string | null) => {
+    if (loading) return;
+    historyRequestRef.current += 1;
+    setSelectedSessionId(id);
+    setLegacySelected(id === null);
+    setMessages([]);
+    setInput("");
+    setSarcasmScore(null);
+    setChatInserts({});
+    interactionsRef.current = 0;
+    setHistoryLimit(100);
+    setShowSessions(false);
+  };
+
+  const sessionsChanged = async (newId?: string) => {
+    const rows = await loadSessions();
+    if (newId) selectSession(newId);
+    else if (selectedSessionId && rows && !rows.some((row) => row.id === selectedSessionId)) {
+      setSelectedSessionId(null);
+      setLegacySelected(false);
+      setMessages([]);
+      setShowSessions(true);
+    }
+  };
+
+  const loadHistory = useCallback(async () => {
+    if (!user || (!selectedSessionId && !legacySelected)) return;
+    const request = ++historyRequestRef.current;
+    setHistoryLoading(true);
+    setHistoryError("");
+    let query = supabase
       .from("chat_messages")
       .select("*")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(20);
+      .eq("user_id", user.id);
+    const scope = sessionHistoryScope(selectedSessionId);
+    query = scope ? query.eq(scope.column, scope.value) : query.is("session_id", null);
+    const { data, error } = await query.order("created_at", { ascending: false }).limit(historyLimit);
+    if (request !== historyRequestRef.current) return;
+    setHistoryLoading(false);
+    if (error) {
+      setHistoryError("Não foi possible de carregar esta conversa. Tente novamente.".replace("possible de", "possível"));
+      return;
+    }
+    setHasOlder((data?.length ?? 0) === historyLimit);
     if (data) {
       const rows = (data as ChatMessage[]).reverse();
       rows.sort((a, b) => {
@@ -241,22 +325,30 @@ export function DanteChat() {
         })),
       );
     }
-  }, [user]);
-
-  const historyLoadedRef = useRef(false);
+  }, [user?.id, selectedSessionId, legacySelected, historyLimit]);
 
   useEffect(() => {
     if (open && user) {
-      if (!historyLoadedRef.current) {
-        loadHistory();
-        historyLoadedRef.current = true;
-      }
       if (profile) setCredits(profile.credits ?? 0);
     }
-    if (!open) {
-      historyLoadedRef.current = false;
-    }
-  }, [open, user, profile, loadHistory]);
+  }, [open, user, profile]);
+
+  useEffect(() => {
+    if (open && user) void loadSessions();
+  }, [open, user?.id, loadSessions]);
+
+  useEffect(() => {
+    if (open && !showSessions) void loadHistory();
+    return () => { historyRequestRef.current += 1; };
+  }, [open, showSessions, loadHistory]);
+
+  useEffect(() => {
+    setSelectedSessionId(null);
+    setLegacySelected(false);
+    setSessions([]);
+    setMessages([]);
+    setShowSessions(true);
+  }, [user?.id]);
 
   useEffect(() => {
     if (!open) return;
@@ -330,7 +422,7 @@ export function DanteChat() {
   };
 
   const sendMessage = async () => {
-    if (!input.trim() || loading || !user || activeBreak || powerOff || danteBlock) return;
+    if (!input.trim() || loading || historyLoading || !sessionWritable || !user || activeBreak || powerOff || danteBlock) return;
 
     const userMsg: UIMessage = {
       id: `temp-${Date.now()}`,
@@ -358,6 +450,7 @@ export function DanteChat() {
         body: JSON.stringify({
           message: userMsg.content,
           client_datetime: createClientDateTime(),
+          session_id: selectedSessionId,
         }),
       });
 
@@ -482,6 +575,7 @@ export function DanteChat() {
 
   const handleButtonClick = () => {
     if (user) {
+      setShowSessions(true);
       setOpen(true);
     } else {
       setShowLoginPrompt(true);
@@ -565,18 +659,26 @@ export function DanteChat() {
             onClick={() => setOpen(false)}
           />
           <div className="dante-chat-window relative z-10 flex h-[100dvh] w-full max-w-md flex-col overflow-hidden rounded-t-2xl border border-white/10 bg-ink-900/95 shadow-2xl animate-slide-up sm:h-auto sm:rounded-2xl">
+            {showSessions && <ChatSessionsDrawer
+              sessions={sessions} limit={sessionLimit} loading={sessionsLoading} error={sessionsError}
+              selectedId={selectedSessionId} pendingIds={pendingSessionIds} hasLegacy={hasLegacy}
+              canClose={!!selectedSessionId || legacySelected}
+              onClose={() => { if (selectedSessionId || legacySelected) setShowSessions(false); else setOpen(false); }}
+              onRetry={() => void loadSessions()} onSelect={selectSession} onChanged={sessionsChanged}
+            />}
             {showProfile && (
               <DanteProfileModal
                 onClose={() => setShowProfile(false)}
                 onCoffeeDonated={handleCoffeeDonated}
               />
             )}
-            <DanteReportDialog target={reportTarget} onClose={() => setReportTarget(null)} />
+            <DanteReportDialog target={reportTarget} onClose={() => { setReportTarget(null); void loadSessions(); }} />
             {/* Header */}
             <div className="dante-chat-bar flex items-center justify-between border-b border-white/10 bg-ink-800/80 px-4 py-3">
+              <Button variant="ghost" size="icon" aria-label="Abrir sessões" title="Sessões de conversa" disabled={loading} onClick={() => { setShowSessions(true); void loadSessions(); }}><Menu /></Button>
               <button
                 type="button"
-                onClick={() => setShowProfile(true)}
+                onClick={() => { if (sessionWritable && !loading) setShowProfile(true); else toast("Abra uma sessão ativa para visitar o perfil e doar café.", "info"); }}
                 className="flex items-center gap-3 text-left"
                 aria-label="Abrir perfil do Dante"
               >
@@ -609,6 +711,11 @@ export function DanteChat() {
                 <X size={20} />
               </button>
             </div>
+            <div className="flex min-h-10 items-center gap-2 border-b border-border px-4 py-2 text-xs text-muted-foreground">
+              {(selectedSession?.is_archived || legacySelected) && <Archive size={14} className="shrink-0" />}
+              <span className="min-w-0 flex-1 truncate">{legacySelected ? "Conversa anterior" : selectedSession?.title ?? "Suas conversas"}</span>
+              {(selectedSession?.is_archived || legacySelected) && <span className="shrink-0">Só leitura</span>}
+            </div>
 
             {/* Messages */}
             <div
@@ -616,6 +723,9 @@ export function DanteChat() {
               className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-cover bg-center"
               style={wallpaper ? { backgroundImage: `url(${wallpaper})` } : undefined}
             >
+              {historyLoading && <div className="flex justify-center py-3" role="status" aria-label="Carregando conversa"><LoaderCircle className="animate-spin text-muted-foreground" /></div>}
+              {historyError && <div className="text-center"><p role="alert" className="text-sm text-destructive">{historyError}</p><Button variant="ghost" onClick={() => void loadHistory()}>Tentar novamente</Button></div>}
+              {hasOlder && !historyLoading && <div className="text-center"><Button variant="ghost" size="sm" onClick={() => setHistoryLimit((value) => value + 100)}>Mensagens anteriores</Button></div>}
               {danteBlock && (
                 <div
                   className={`mb-2 flex flex-col items-center rounded-2xl border px-4 py-5 text-center ${danteBlock.reason === "tired" ? "border-gold-400/20 bg-gold-400/5" : "border-rose-400/20 bg-rose-500/10"}`}
@@ -676,7 +786,7 @@ export function DanteChat() {
                 </div>
               )}
 
-              {messages.length === 0 && !loading && !activeBreak && !danteBlock && (
+              {messages.length === 0 && !loading && !historyLoading && !historyError && !activeBreak && !danteBlock && (
                 <div className="flex flex-col items-center justify-center py-12 text-center">
                   <img
                     src={danteAvatar}
@@ -826,6 +936,15 @@ export function DanteChat() {
 
             {/* Input */}
             <div className="dante-chat-bar border-t border-white/10 bg-ink-800/80 p-3">
+              {!sessionWritable ? (
+                <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                  <span>{legacySelected ? "Conversa anterior · somente leitura" : "Sessão arquivada"}</span>
+                  {selectedSession?.is_archived && <Button variant="outline" size="sm" disabled={loading} onClick={async () => {
+                    try { await mutateChatSession('unarchive', selectedSession.id); await sessionsChanged(); }
+                    catch (error) { toast(error instanceof Error ? error.message : "Não foi possível reativar.", "error"); }
+                  }}><ArchiveRestore />Reativar</Button>}
+                </div>
+              ) : <>
               {activeBreak && (
                 <div className="mb-2 flex items-start gap-2 rounded-xl border border-white/10 bg-ink-700/50 px-3 py-2 text-xs text-grape-200/70">
                   <Moon size={14} className="mt-0.5 flex-shrink-0" />
@@ -870,7 +989,7 @@ export function DanteChat() {
                       sendMessage();
                     }
                   }}
-                  disabled={loading || !!activeBreak || powerOff || !!danteBlock}
+                  disabled={loading || historyLoading || !!historyError || !!activeBreak || powerOff || !!danteBlock}
                   placeholder={
                     danteBlock
                       ? `Conversa liberada em ${formatBlockCountdown(danteBlock.until, blockNow)}...`
@@ -884,7 +1003,7 @@ export function DanteChat() {
                 />
                 <button
                   onClick={sendMessage}
-                  disabled={loading || !input.trim() || !!activeBreak || powerOff || !!danteBlock}
+                  disabled={loading || historyLoading || !!historyError || !input.trim() || !!activeBreak || powerOff || !!danteBlock}
                   className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-white transition disabled:opacity-50"
                   style={{ background: DANTE_GRADIENT }}
                   aria-label="Enviar"
@@ -892,6 +1011,7 @@ export function DanteChat() {
                   <Rocket size={18} />
                 </button>
               </div>
+              </>}
             </div>
           </div>
         </div>
