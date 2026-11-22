@@ -137,6 +137,7 @@ Deno.serve(async (req: Request) => {
 
     const body = (await req.json().catch(() => ({}))) as {
       message?: string;
+      session_id?: string;
       event_type?: string;
       client_datetime?: { context?: string };
     };
@@ -330,10 +331,17 @@ Retorne APENAS o JSON puro, sem blocos de código markdown (\`\`\`json).${timeCo
     if (!isDonation) {
       const historyLimit = isAdmin ? 50 : 20;
 
-      const { data: historyRows } = await admin
+            let historyQuery = admin
         .from("chat_messages")
         .select("role, content, created_at")
-        .eq("user_id", userId)
+        .eq("user_id", userId);
+
+      // Se passou session_id, isola apenas o histórico daquela conversa
+      if (body.session_id) {
+        historyQuery = historyQuery.eq("session_id", body.session_id);
+      }
+
+      const { data: historyRows } = await historyQuery
         .order("created_at", { ascending: false })
         .limit(historyLimit);
 
@@ -441,6 +449,7 @@ Retorne APENAS o JSON puro, sem blocos de código markdown (\`\`\`json).${timeCo
     await admin.from("chat_messages").insert([
       {
         user_id: userId,
+        session_id: body.session_id || null,
         role: "user",
         content: storedUserMessage,
         created_at: userTime,
@@ -448,6 +457,7 @@ Retorne APENAS o JSON puro, sem blocos de código markdown (\`\`\`json).${timeCo
       },
       {
         user_id: userId,
+        session_id: body.session_id || null,
         role: "assistant",
         content: reply,
         created_at: assistantTime,
@@ -455,6 +465,14 @@ Retorne APENAS o JSON puro, sem blocos de código markdown (\`\`\`json).${timeCo
         source: "chat",
       },
     ]);
+
+    // Atualiza a última atividade da sessão
+    if (body.session_id) {
+      await admin
+        .from("chat_sessions")
+        .update({ updated_at: new Date().toISOString() })
+        .eq("id", body.session_id);
+    }
 
     // Atualização de créditos de mensagens
     let updatedCredits = profile.credits ?? 0;
