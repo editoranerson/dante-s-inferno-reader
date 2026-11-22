@@ -56,6 +56,26 @@ interface UIMessage {
 
 const DANTE_GRADIENT = "linear-gradient(135deg, #7F00FF, #FF007F)";
 
+function createClientDateTime(now = new Date()) {
+  const date = new Intl.DateTimeFormat("pt-BR", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  }).format(now);
+  const time = new Intl.DateTimeFormat("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZoneName: "short",
+  }).format(now);
+  const weekday = new Intl.DateTimeFormat("pt-BR", { weekday: "long" }).format(now);
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+  return {
+    context: `Hoje é ${date} (${weekday}), horário local: ${time} (fuso ${timezone}).`,
+  };
+}
+
 function Sarcasmometer({ score }: { score: number }) {
   const clamped = Math.max(0, Math.min(100, score));
   const gradient = "linear-gradient(to right, #38BDF8, #B5E853, #FFC226, #FF8C42, #EF4444)";
@@ -337,6 +357,7 @@ export function DanteChat() {
         },
         body: JSON.stringify({
           message: userMsg.content,
+          client_datetime: createClientDateTime(),
         }),
       });
 

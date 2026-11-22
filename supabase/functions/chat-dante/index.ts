@@ -138,9 +138,11 @@ Deno.serve(async (req: Request) => {
     const body = (await req.json().catch(() => ({}))) as {
       message?: string;
       event_type?: string;
+      client_datetime?: { context?: string };
     };
 
     const isDonation = body.event_type === "coffee_donation";
+    const timeContext = isDonation ? "" : body.client_datetime?.context ?? "";
     let userMessage = (body.message ?? "").trim().replace(/^\[EVENTO_DOA[ÇC][ÃA]O_CAF[ÉE]\]\s*/i, "");
     let storedUserMessage = userMessage;
     let receipt: ReturnType<typeof buildDonationReceipt> | null = null;
@@ -299,7 +301,7 @@ FORMATO DE RESPOSTA OBRIGATÓRIO (JSON PURO):
   "flag": null | { "reason": "insult" | "threat_violence" | "jailbreak" | "tired", "severity": "low" | "medium" | "high", "block_minutes": <número> }
 }
 
-Retorne APENAS o JSON puro, sem blocos de código markdown (\`\`\`json).${knowledgeBlock ? `\n\n--- Conhecimento do Dante ---\n${knowledgeBlock}` : ""}`;
+Retorne APENAS o JSON puro, sem blocos de código markdown (\`\`\`json).${timeContext ? `\n\n${timeContext}` : ""}${knowledgeBlock ? `\n\n--- Conhecimento do Dante ---\n${knowledgeBlock}` : ""}`;
 
     const historyLimit = isAdmin ? 50 : 20;
 
