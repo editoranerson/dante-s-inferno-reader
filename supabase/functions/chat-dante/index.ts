@@ -148,6 +148,20 @@ Deno.serve(async (req: Request) => {
     let storedUserMessage = userMessage;
     let receipt: ReturnType<typeof buildDonationReceipt> | null = null;
 
+        // Se a sessão estiver arquivada, bloqueia o envio de novas mensagens
+    if (body.session_id) {
+      const { data: session } = await admin
+        .from("chat_sessions")
+        .select("is_archived")
+        .eq("id", body.session_id)
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (session?.is_archived) {
+        return json({ error: "session_archived", message: "Esta conversa está arquivada." }, 403);
+      }
+    }
+
     // Doação confirmada no banco: gratuita, não consome créditos de IA
     if (isDonation) {
       const since = new Date(Date.now() - DONATION_WINDOW_MS).toISOString();
