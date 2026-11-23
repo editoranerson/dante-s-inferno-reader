@@ -38,3 +38,4 @@ use the editor.
 - Browser coffee receipts normalize old and new donation records to items and purchase totals only; legacy energy and acceptance fields must not restore removed controls.
 - Chat session controls use existing authenticated RPCs for mutations and limits; never delete sessions directly because the RPC enforces moderation locks.
 - Chat history and requests are scoped to the selected session, with archived and pre-session history read-only; this prevents cross-conversation context and keeps old messages accessible without migration.
+- Semantic shadcn color tokens map to the imported palette through surface variables with light-theme overrides; this keeps drawers and portaled menus opaque and legible in both themes.

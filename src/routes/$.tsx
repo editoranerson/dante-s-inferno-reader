@@ -4,8 +4,6 @@ import { getChapterMeta } from "@/lib/chapterMeta.functions";
 
 const App = lazy(() => import("@/App"));
 
-const DEFAULT_IMAGE = "https://queridodante.lovable.app/og-preview.jpg";
-
 export const Route = createFileRoute("/$")({
   loader: async ({ params }) => {
     const m = (params._splat ?? "").match(/^biblioteca\/[^/]+\/(.+)$/);
@@ -15,7 +13,7 @@ export const Route = createFileRoute("/$")({
   head: ({ loaderData }) => {
     const ch = loaderData?.chapter;
     if (ch) {
-      const img = ch.image ?? DEFAULT_IMAGE;
+      const img = ch.image && /^https:\/\//.test(ch.image) ? ch.image : null;
       return {
         meta: [
           { title: ch.title },
@@ -23,30 +21,27 @@ export const Route = createFileRoute("/$")({
           { property: "og:title", content: ch.title },
           { property: "og:description", content: ch.description },
           { property: "og:type", content: "article" },
-          { property: "og:image", content: img },
+          ...(img ? [{ property: "og:image", content: img }, { name: "twitter:image", content: img }] : []),
           { name: "twitter:card", content: "summary_large_image" },
-          { name: "twitter:image", content: img },
         ],
       };
     }
     return {
     meta: [
-      { title: "Querido Dante — O universo interativo do Dante" },
+      { title: "Querido Dante — Biblioteca e comunidade" },
       {
         name: "description",
         content:
           "Explore o universo de Querido Dante: biblioteca, chatstories, personagens, segredos, minijogos e muito mais.",
       },
-      { property: "og:title", content: "Querido Dante — O universo interativo do Dante" },
+      { property: "og:title", content: "Querido Dante — Biblioteca e comunidade" },
       {
         property: "og:description",
         content:
           "Biblioteca, chatstories, personagens, segredos, minijogos e recompensas no universo de Querido Dante.",
       },
       { property: "og:type", content: "website" },
-      { property: "og:image", content: "https://queridodante.lovable.app/og-preview.jpg" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:image", content: "https://queridodante.lovable.app/og-preview.jpg" },
     ],
     };
   },

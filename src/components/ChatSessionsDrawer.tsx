@@ -100,7 +100,7 @@ export function ChatSessionsDrawer(props: Props) {
           </div>}
       </div>
       <Dialog open={!!editing} onOpenChange={(open) => { if (!open && !busy) setEditing(null); }}>
-        <DialogContent className="z-[80]">
+        <DialogContent className="z-[80] max-w-[calc(100%-2rem)] text-foreground sm:max-w-lg">
           <DialogHeader><DialogTitle>Renomear sessão</DialogTitle><DialogDescription>Nome da conversa</DialogDescription></DialogHeader>
           <form onSubmit={(event) => { event.preventDefault(); if (editing && title.trim()) void run('rename', editing); }}>
             <input aria-label="Nome da sessão" autoFocus maxLength={80} value={title} onChange={(event) => setTitle(event.target.value)} disabled={busy} className="mb-4 w-full rounded-md border border-input bg-background px-3 py-2 text-foreground outline-none focus:ring-1 focus:ring-ring" />
@@ -109,7 +109,7 @@ export function ChatSessionsDrawer(props: Props) {
         </DialogContent>
       </Dialog>
       <Dialog open={!!deleting} onOpenChange={(open) => { if (!open && !busy) setDeleting(null); }}>
-        <DialogContent className="z-[80]">
+        <DialogContent className="z-[80] max-w-[calc(100%-2rem)] text-foreground sm:max-w-lg">
           <DialogHeader><DialogTitle>Excluir sessão?</DialogTitle><DialogDescription>“{deleting?.title}” e suas mensagens serão excluídas permanentemente.</DialogDescription></DialogHeader>
           <DialogFooter><Button variant="outline" disabled={busy} onClick={() => setDeleting(null)}>Cancelar</Button><Button variant="destructive" disabled={busy} onClick={() => { if (deleting) void run('delete', deleting); }}>{busy && <LoaderCircle className="animate-spin" />}Excluir sessão</Button></DialogFooter>
         </DialogContent>

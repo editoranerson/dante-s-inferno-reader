@@ -304,7 +304,7 @@ export function DanteChat() {
     if (request !== historyRequestRef.current) return;
     setHistoryLoading(false);
     if (error) {
-      setHistoryError("Não foi possible de carregar esta conversa. Tente novamente.".replace("possible de", "possível"));
+      setHistoryError("Não foi possível carregar esta conversa. Tente novamente.");
       return;
     }
     setHasOlder((data?.length ?? 0) === historyLimit);
@@ -658,7 +658,7 @@ export function DanteChat() {
             className="absolute inset-0 bg-ink-950/60 backdrop-blur-sm sm:hidden"
             onClick={() => setOpen(false)}
           />
-          <div className="dante-chat-window relative z-10 flex h-[100dvh] w-full max-w-md flex-col overflow-hidden rounded-t-2xl border border-white/10 bg-ink-900/95 shadow-2xl animate-slide-up sm:h-auto sm:rounded-2xl">
+          <div className="dante-chat-window relative z-10 flex h-[100dvh] w-full max-w-md flex-col overflow-hidden rounded-t-2xl border border-white/10 bg-ink-900/95 shadow-2xl animate-slide-up sm:h-[min(760px,calc(100dvh-48px))] sm:rounded-2xl">
             {showSessions && <ChatSessionsDrawer
               sessions={sessions} limit={sessionLimit} loading={sessionsLoading} error={sessionsError}
               selectedId={selectedSessionId} pendingIds={pendingSessionIds} hasLegacy={hasLegacy}
@@ -720,7 +720,7 @@ export function DanteChat() {
             {/* Messages */}
             <div
               ref={scrollRef}
-              className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-cover bg-center"
+              className="min-h-0 flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-cover bg-center"
               style={wallpaper ? { backgroundImage: `url(${wallpaper})` } : undefined}
             >
               {historyLoading && <div className="flex justify-center py-3" role="status" aria-label="Carregando conversa"><LoaderCircle className="animate-spin text-muted-foreground" /></div>}
