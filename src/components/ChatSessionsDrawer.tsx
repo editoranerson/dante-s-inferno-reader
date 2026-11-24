@@ -57,7 +57,7 @@ export function ChatSessionsDrawer(props: Props) {
         </Button>
       </header>
       <div className="space-y-3 px-4 pb-3 pt-4">
-        <Button className="w-full" onClick={() => void run('create')} disabled={busy || props.loading || !!props.error || activeQuota.full}>
+        <Button className="w-full bg-gradient-to-r from-grape-500 to-rose-500 text-white shadow-glow hover:brightness-110" onClick={() => void run('create')} disabled={busy || props.loading || !!props.error || activeQuota.full}>
           {busy ? <LoaderCircle className="animate-spin" /> : <Plus />} Nova sessão
         </Button>
         <Tabs value={archived ? 'archived' : 'active'} onValueChange={(value) => setArchived(value === 'archived')}>
