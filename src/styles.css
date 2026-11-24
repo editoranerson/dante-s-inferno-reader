@@ -284,6 +284,28 @@ body {
   .btn-danger {
     @apply inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-semibold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-rose-600/90 text-white hover:bg-rose-600;
   }
+  /* Botão "Continuar com o Google" — diretrizes oficiais de marca do Google.
+     Tema escuro por padrão; o tema claro é ajustado em `html.light .btn-google`. */
+  .btn-google {
+    @apply inline-flex w-full items-center justify-center rounded-full transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
+    gap: 10px;
+    padding: 12px;
+    font-family: 'Google Sans', 'Plus Jakarta Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 20px;
+    background-color: #131314;
+    border: 1px solid #8e918f;
+    color: #e3e3e3;
+  }
+  .btn-google:hover:not(:disabled) {
+    background-color: #1f1f20;
+    border-color: #a7aaa8;
+  }
+  .btn-google:focus-visible {
+    outline: 2px solid #8b3dff;
+    outline-offset: 2px;
+  }
   .input {
     @apply w-full rounded-xl border border-white/10 bg-ink-800/60 px-4 py-3 text-sm text-grape-50 placeholder:text-grape-200/40 outline-none transition focus:border-grape-400 focus:ring-2 focus:ring-grape-400/30;
   }
@@ -427,6 +449,16 @@ html.light .btn-ghost {
 html.light .btn-ghost:hover {
   background-color: rgba(240, 235, 248, 0.8);
   border-color: rgba(100, 80, 140, 0.25);
+}
+
+html.light .btn-google {
+  background-color: #ffffff;
+  border-color: #747775;
+  color: #1f1f1f;
+}
+html.light .btn-google:hover:not(:disabled) {
+  background-color: #f8f8f8;
+  border-color: #5f6261;
 }
 
 html.light .input {
