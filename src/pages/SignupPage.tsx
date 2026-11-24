@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { navigateTo } from '@/lib/router';
 import { useToast } from '@/components/Toast';
 import { syncPendingRewards, hasPendingRewards } from '@/lib/pendingRewards';
+import { GoogleSignInButton } from '@/components/GoogleSignInButton';
 
 export function SignupPage() {
   const { toast } = useToast();
@@ -112,6 +113,12 @@ export function SignupPage() {
           </div>
 
           <form onSubmit={submit} className="card w-full space-y-4 bg-ink-800/60 p-6">
+            <GoogleSignInButton />
+            <div className="flex items-center gap-3">
+              <span className="h-px flex-1 bg-white/10" />
+              <span className="text-xs text-grape-200/60">ou continue com e-mail</span>
+              <span className="h-px flex-1 bg-white/10" />
+            </div>
             <div>
               <label className="label">Nome Completo</label>
               <div className="relative">
